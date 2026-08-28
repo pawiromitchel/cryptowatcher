@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -143,15 +144,18 @@ func TestSparklineAndRangeBar(t *testing.T) {
 func TestRenderMultiLineChart(t *testing.T) {
 	cfg := model.DefaultConfig()
 	mockFetcher := fetcher.NewMockFetcher()
-	m := NewModel(cfg, mockFetcher)
+	pairs, err := mockFetcher.FetchPrices(context.Background(), cfg.Pairs)
+	if err != nil {
+		t.Fatalf("failed to fetch mock prices: %v", err)
+	}
 
-	chartStr := RenderMultiLineChart(m.pairs, 80)
+	chartStr := RenderMultiLineChart(pairs, 80)
 	if chartStr == "" {
 		t.Fatalf("expected non-empty correlation chart string")
 	}
 
 	if !containsSubstring(chartStr, "Legend:") {
-		t.Errorf("expected legend in chart output")
+		t.Errorf("expected legend in chart output, got: %s", chartStr)
 	}
 }
 

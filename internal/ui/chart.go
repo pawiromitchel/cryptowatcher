@@ -19,13 +19,10 @@ var lineColors = []lipgloss.Color{
 	lipgloss.Color("141"), // Purple
 }
 
-var coinMarkers = []rune{'●', '▲', '■', '◆', '★', '⯌'}
-
 type chartSeries struct {
 	display string
 	pcts    []float64
 	color   lipgloss.Color
-	marker  rune
 	change  float64
 }
 
@@ -38,18 +35,21 @@ func (s chartSeries) formattedChange() string {
 	return neutralStyle.Render("0.00%")
 }
 
-// RenderMultiLineChart renders a normalized 7-day relative performance line chart.
+// RenderMultiLineChart renders a continuous Braille line chart for 7-day relative performance.
 func RenderMultiLineChart(pairs []model.CryptoPair, totalWidth int) string {
 	if len(pairs) == 0 {
 		return ""
 	}
 
-	chartHeight := 9
+	chartRows := 9
 	yAxisWidth := 9
-	plotWidth := totalWidth - yAxisWidth - 3
-	if plotWidth < 30 {
-		plotWidth = 30
+	plotCols := totalWidth - yAxisWidth - 3
+	if plotCols < 30 {
+		plotCols = 30
 	}
+
+	subWidth := plotCols * 2
+	subHeight := chartRows * 4
 
 	seriesList := make([]chartSeries, 0, len(pairs))
 	globalMin := 0.0
@@ -89,14 +89,12 @@ func RenderMultiLineChart(pairs []model.CryptoPair, totalWidth int) string {
 		}
 
 		color := lineColors[i%len(lineColors)]
-		marker := coinMarkers[i%len(coinMarkers)]
 		lastPct := pcts[len(pcts)-1]
 
 		seriesList = append(seriesList, chartSeries{
 			display: pair.Display,
 			pcts:    pcts,
 			color:   color,
-			marker:  marker,
 			change:  lastPct,
 		})
 	}
@@ -105,7 +103,7 @@ func RenderMultiLineChart(pairs []model.CryptoPair, totalWidth int) string {
 		return neutralStyle.Render("   Insufficient 7-day candle data for correlation chart.")
 	}
 
-	// Add margin padding to min/max
+	// Add margin padding
 	if globalMax == globalMin {
 		globalMax += 1.0
 		globalMin -= 1.0
@@ -115,64 +113,73 @@ func RenderMultiLineChart(pairs []model.CryptoPair, totalWidth int) string {
 		globalMin -= padding
 	}
 
-	// Build 2D character grid
-	grid := make([][]string, chartHeight)
-	for r := 0; r < chartHeight; r++ {
-		grid[r] = make([]string, plotWidth)
-		for c := 0; c < plotWidth; c++ {
-			grid[r][c] = " "
-		}
-	}
-
 	// Calculate zero line row index
 	zeroRow := -1
 	if globalMin <= 0 && globalMax >= 0 {
 		zeroNorm := (0.0 - globalMin) / (globalMax - globalMin)
-		zeroRow = chartHeight - 1 - int(math.Round(zeroNorm*float64(chartHeight-1)))
+		zeroRow = chartRows - 1 - int(math.Round(zeroNorm*float64(chartRows-1)))
 	}
 
-	// Draw subtle zero baseline
-	if zeroRow >= 0 && zeroRow < chartHeight {
-		zeroStyle := lipgloss.NewStyle().Foreground(grayColor)
-		for c := 0; c < plotWidth; c++ {
-			grid[zeroRow][c] = zeroStyle.Render("─")
+	// Create styled character grid
+	cellGrid := make([][]string, chartRows)
+	for r := 0; r < chartRows; r++ {
+		cellGrid[r] = make([]string, plotCols)
+		for c := 0; c < plotCols; c++ {
+			if r == zeroRow {
+				cellGrid[r][c] = lipgloss.NewStyle().Foreground(grayColor).Render("─")
+			} else {
+				cellGrid[r][c] = " "
+			}
 		}
 	}
 
-	// Plot each coin's points onto grid
+	// Render continuous Braille lines for each coin series
 	for _, s := range seriesList {
+		subGrid := make([][]uint8, subHeight)
+		for r := 0; r < subHeight; r++ {
+			subGrid[r] = make([]uint8, plotCols)
+		}
+
 		numPts := len(s.pcts)
-		style := lipgloss.NewStyle().Foreground(s.color).Bold(true)
-		markerStr := style.Render(string(s.marker))
+		pts := make([][2]int, numPts)
 
-		for col := 0; col < plotWidth; col++ {
-			idxFloat := (float64(col) / float64(plotWidth - 1)) * float64(numPts-1)
-			idx := int(math.Round(idxFloat))
-			if idx < 0 {
-				idx = 0
-			}
-			if idx >= numPts {
-				idx = numPts - 1
-			}
-
-			val := s.pcts[idx]
+		for j, val := range s.pcts {
+			x := int(math.Round((float64(j) / float64(numPts-1)) * float64(subWidth-1)))
 			norm := (val - globalMin) / (globalMax - globalMin)
-			row := chartHeight - 1 - int(math.Round(norm*float64(chartHeight-1)))
-			if row < 0 {
-				row = 0
+			y := (subHeight - 1) - int(math.Round(norm*float64(subHeight-1)))
+			if y < 0 {
+				y = 0
 			}
-			if row >= chartHeight {
-				row = chartHeight - 1
+			if y >= subHeight {
+				y = subHeight - 1
 			}
+			pts[j] = [2]int{x, y}
+		}
 
-			grid[row][col] = markerStr
+		// Connect adjacent sub-pixels with Bresenham's line algorithm
+		for j := 0; j < numPts-1; j++ {
+			p1 := pts[j]
+			p2 := pts[j+1]
+			drawSubLine(subGrid, p1[0], p1[1], p2[0], p2[1])
+		}
+
+		// Apply braille characters to main cellGrid with series color
+		style := lipgloss.NewStyle().Foreground(s.color).Bold(true)
+		for r := 0; r < chartRows; r++ {
+			for c := 0; c < plotCols; c++ {
+				bitmask := subGrid[r][c]
+				if bitmask > 0 {
+					rRune := rune(0x2800 + uint16(bitmask))
+					cellGrid[r][c] = style.Render(string(rRune))
+				}
+			}
 		}
 	}
 
-	// Render Grid into output string with Y-axis
+	// Build output string
 	var sb strings.Builder
-	for r := 0; r < chartHeight; r++ {
-		valAtRow := globalMax - (float64(r)/float64(chartHeight-1))*(globalMax-globalMin)
+	for r := 0; r < chartRows; r++ {
+		valAtRow := globalMax - (float64(r)/float64(chartRows-1))*(globalMax-globalMin)
 		yLabel := fmt.Sprintf("%+6.1f%%", valAtRow)
 
 		axisChar := "│"
@@ -182,17 +189,16 @@ func RenderMultiLineChart(pairs []model.CryptoPair, totalWidth int) string {
 
 		sb.WriteString(neutralStyle.Render(fmt.Sprintf("%s %s ", yLabel, axisChar)))
 
-		for c := 0; c < plotWidth; c++ {
-			sb.WriteString(grid[r][c])
+		for c := 0; c < plotCols; c++ {
+			sb.WriteString(cellGrid[r][c])
 		}
 		sb.WriteString("\n")
 	}
 
-	// X-axis timeline line
-	xAxisLine := strings.Repeat("─", plotWidth)
+	// X-axis timeline
+	xAxisLine := strings.Repeat("─", plotCols)
 	sb.WriteString(neutralStyle.Render(fmt.Sprintf("%9s └%s\n", "", xAxisLine)))
 
-	// X-axis time labels
 	timelineLabels := fmt.Sprintf(
 		"%9s  %-14s %-14s %-14s %14s",
 		"", "7d ago", "5d ago", "3d ago", "Now",
@@ -200,14 +206,94 @@ func RenderMultiLineChart(pairs []model.CryptoPair, totalWidth int) string {
 	sb.WriteString(neutralStyle.Render(timelineLabels))
 	sb.WriteString("\n\n")
 
-	// Legend footer below chart
+	// Legend
 	legendItems := make([]string, 0, len(seriesList))
 	for _, s := range seriesList {
 		tagStyle := lipgloss.NewStyle().Foreground(s.color).Bold(true)
-		item := fmt.Sprintf("%s %s (%s)", tagStyle.Render(string(s.marker)), tagStyle.Render(s.display), s.formattedChange())
+		item := fmt.Sprintf("%s %s (%s)", tagStyle.Render("─"), tagStyle.Render(s.display), s.formattedChange())
 		legendItems = append(legendItems, item)
 	}
 
 	sb.WriteString("Legend:  " + strings.Join(legendItems, "    "))
 	return sb.String()
+}
+
+func drawSubLine(subGrid [][]uint8, x0, y0, x1, y1 int) {
+	dx := absInt(x1 - x0)
+	dy := absInt(y1 - y0)
+	sx := -1
+	if x0 < x1 {
+		sx = 1
+	}
+	sy := -1
+	if y0 < y1 {
+		sy = 1
+	}
+	err := dx - dy
+
+	for {
+		setSubPixel(subGrid, x0, y0)
+		if x0 == x1 && y0 == y1 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x0 += sx
+		}
+		if e2 < dx {
+			err += dx
+			y0 += sy
+		}
+	}
+}
+
+func setSubPixel(subGrid [][]uint8, x, y int) {
+	if y < 0 || x < 0 {
+		return
+	}
+	chartRows := len(subGrid) / 4
+	cellRow := y / 4
+	cellCol := x / 2
+
+	if cellRow < 0 || cellRow >= chartRows || cellCol < 0 || cellCol >= len(subGrid[0]) {
+		return
+	}
+
+	subX := x % 2
+	subY := y % 4
+
+	var bit uint8
+	if subX == 0 {
+		switch subY {
+		case 0:
+			bit = 0x01
+		case 1:
+			bit = 0x02
+		case 2:
+			bit = 0x04
+		case 3:
+			bit = 0x40
+		}
+	} else {
+		switch subY {
+		case 0:
+			bit = 0x08
+		case 1:
+			bit = 0x10
+		case 2:
+			bit = 0x20
+		case 3:
+			bit = 0x80
+		}
+	}
+
+	subGrid[cellRow][cellCol] |= bit
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
