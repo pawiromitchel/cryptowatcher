@@ -164,8 +164,16 @@ func (m Model) renderInspectorPanel() string {
 
 	// 24H Price Range Bar Slider
 	sb.WriteString("24H Price Range:\n")
-	rangeBar := RenderRangeBar(pair.Price, pair.Low24h, pair.High24h, 24)
-	sb.WriteString(fmt.Sprintf("%s %s %s\n\n", formatPrice(pair.Low24h), rangeBar, formatPrice(pair.High24h)))
+	lowStr := fmt.Sprintf("Low: %s", formatPrice(pair.Low24h))
+	highStr := fmt.Sprintf("High: %s", formatPrice(pair.High24h))
+	panelInnerWidth := 36
+	spaces := panelInnerWidth - lipgloss.Width(lowStr) - lipgloss.Width(highStr)
+	if spaces < 1 {
+		spaces = 1
+	}
+	sb.WriteString(fmt.Sprintf("%s%s%s\n", lowStr, strings.Repeat(" ", spaces), highStr))
+	rangeBar := RenderRangeBar(pair.Price, pair.Low24h, pair.High24h, panelInnerWidth-2)
+	sb.WriteString(fmt.Sprintf("%s\n\n", rangeBar))
 
 	// 24H Sparkline Trend
 	sb.WriteString("24H Trend Sparkline:\n")
