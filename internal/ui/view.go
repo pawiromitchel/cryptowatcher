@@ -5,6 +5,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/lipgloss"
+
 	"cryptowatcher/internal/model"
 )
 
@@ -42,7 +44,7 @@ func (m Model) renderTable() string {
 
 	// Column header
 	header := fmt.Sprintf(
-		"%-3s %-10s %-14s %-12s %-12s %-12s %-14s",
+		"%-3s %-12s %-14s %-12s %-14s %-14s %-14s",
 		"", "PAIR", "PRICE (USD)", "24H CHANGE", "24H HIGH", "24H LOW", "24H VOLUME",
 	)
 	sb.WriteString(headerStyle.Render(header))
@@ -64,22 +66,23 @@ func (m Model) renderTable() string {
 		changeStr := formatChange(pair.Change24h)
 		highStr := formatPrice(pair.High24h)
 		lowStr := formatPrice(pair.Low24h)
-		volStr := fmt.Sprintf("%.2f", pair.Volume24h)
+		volStr := formatVolume(pair.Volume24h)
 
 		if pair.Err != nil {
 			priceStr = errorStyle.Render("Error")
 			changeStr = "-"
 		}
 
+		// Use padRight with lipgloss.Width to ensure ANSI colors do not corrupt column alignment
 		rowContent := fmt.Sprintf(
-			"%-3s %-10s %-14s %-12s %-12s %-12s %-14s",
-			cursorStr,
-			pair.Display,
-			priceStr,
-			changeStr,
-			highStr,
-			lowStr,
-			volStr,
+			"%s %s %s %s %s %s %s",
+			padRight(cursorStr, 3),
+			padRight(pair.Display, 12),
+			padRight(priceStr, 14),
+			padRight(changeStr, 12),
+			padRight(highStr, 14),
+			padRight(lowStr, 14),
+			padRight(volStr, 14),
 		)
 
 		if i == m.cursor {
@@ -116,6 +119,14 @@ func (m Model) renderFooter() string {
 	return sb.String()
 }
 
+func padRight(str string, width int) string {
+	w := lipgloss.Width(str)
+	if w >= width {
+		return str
+	}
+	return str + strings.Repeat(" ", width-w)
+}
+
 func formatPrice(price float64) string {
 	if price == 0 {
 		return "$0.00"
@@ -136,6 +147,19 @@ func formatChange(change float64) string {
 		return negativeStyle.Render(fmt.Sprintf("%.2f%%", change))
 	}
 	return neutralStyle.Render("0.00%")
+}
+
+func formatVolume(vol float64) string {
+	if vol >= 1_000_000_000 {
+		return fmt.Sprintf("%.2fB", vol/1_000_000_000)
+	}
+	if vol >= 1_000_000 {
+		return fmt.Sprintf("%.2fM", vol/1_000_000)
+	}
+	if vol >= 1_000 {
+		return fmt.Sprintf("%.2fK", vol/1_000)
+	}
+	return fmt.Sprintf("%.2f", vol)
 }
 
 // Ensure time import is referenced properly

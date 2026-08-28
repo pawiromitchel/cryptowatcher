@@ -107,6 +107,27 @@ func TestUIModelViewRendering(t *testing.T) {
 	}
 }
 
+func TestFormatVolume(t *testing.T) {
+	tests := []struct {
+		input float64
+		want  string
+	}{
+		{500.50, "500.50"},
+		{10687.52, "10.69K"},
+		{106915.89, "106.92K"},
+		{1880137.64, "1.88M"},
+		{261156235.80, "261.16M"},
+		{1500000000.00, "1.50B"},
+	}
+
+	for _, tt := range tests {
+		got := formatVolume(tt.input)
+		if got != tt.want {
+			t.Errorf("formatVolume(%f) = %q; want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
 func containsSubstring(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || (len(s) > len(sub) && stringSearch(s, sub)))
 }
