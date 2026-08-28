@@ -140,6 +140,21 @@ func TestSparklineAndRangeBar(t *testing.T) {
 	}
 }
 
+func TestRenderMultiLineChart(t *testing.T) {
+	cfg := model.DefaultConfig()
+	mockFetcher := fetcher.NewMockFetcher()
+	m := NewModel(cfg, mockFetcher)
+
+	chartStr := RenderMultiLineChart(m.pairs, 80)
+	if chartStr == "" {
+		t.Fatalf("expected non-empty correlation chart string")
+	}
+
+	if !containsSubstring(chartStr, "Legend:") {
+		t.Errorf("expected legend in chart output")
+	}
+}
+
 func containsSubstring(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || (len(s) > len(sub) && stringSearch(s, sub)))
 }

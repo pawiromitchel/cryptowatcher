@@ -33,6 +33,14 @@ func (m Model) View() string {
 	b.WriteString(mainContent)
 	b.WriteString("\n")
 
+	// 7-Day Multi-Coin Correlation Line Chart Box
+	chartContent := m.renderChartSection()
+	if chartContent != "" {
+		chartBox := chartBoxStyle.Render(chartContent)
+		b.WriteString(chartBox)
+		b.WriteString("\n")
+	}
+
 	// Modal Overlay for Adding Pairs
 	if m.mode == modeAdd {
 		b.WriteString("\n")
@@ -198,6 +206,26 @@ func (m Model) renderInspectorPanel() string {
 		updatedTime = pair.LastUpdated.Format("15:04:05")
 	}
 	sb.WriteString(fmt.Sprintf("%-16s %s\n", "Last Sync:", updatedTime))
+
+	return sb.String()
+}
+
+func (m Model) renderChartSection() string {
+	var sb strings.Builder
+	sb.WriteString(subHeaderStyle.Render("📈 7-DAY RELATIVE PERFORMANCE & CORRELATION CHART (NORMALIZED %)"))
+	sb.WriteString("\n\n")
+
+	totalWidth := m.width
+	if totalWidth <= 0 {
+		totalWidth = 110
+	}
+	chartWidth := totalWidth - 6
+	if chartWidth < 60 {
+		chartWidth = 60
+	}
+
+	chartStr := RenderMultiLineChart(m.pairs, chartWidth)
+	sb.WriteString(chartStr)
 
 	return sb.String()
 }

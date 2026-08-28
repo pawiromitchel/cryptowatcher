@@ -2,6 +2,7 @@ package fetcher
 
 import (
 	"context"
+	"math"
 	"time"
 
 	"cryptowatcher/internal/model"
@@ -25,7 +26,9 @@ func NewMockFetcher() *MockFetcher {
 				Low24h:      93800.00,
 				Volume24h:   24510.33,
 				Change24h:   2.46,
+				Change7D:    5.20,
 				History:     []float64{94100, 94500, 93800, 95200, 96000, 97100, 96800, 96420.50},
+				History7D:   generateMock7D(91600.00, 96420.50, 0.0),
 				LastUpdated: time.Now(),
 			},
 			"ETH-USD": {
@@ -37,7 +40,9 @@ func NewMockFetcher() *MockFetcher {
 				Low24h:      2710.00,
 				Volume24h:   184200.50,
 				Change24h:   -2.12,
+				Change7D:    -1.50,
 				History:     []float64{2810, 2840, 2820, 2790, 2750, 2710, 2730, 2750.25},
+				History7D:   generateMock7D(2792.00, 2750.25, 0.5),
 				LastUpdated: time.Now(),
 			},
 			"SOL-USD": {
@@ -49,7 +54,9 @@ func NewMockFetcher() *MockFetcher {
 				Low24h:      173.20,
 				Volume24h:   892000.10,
 				Change24h:   6.14,
+				Change7D:    12.40,
 				History:     []float64{175, 173.2, 178, 182, 186, 189.5, 184, 185.75},
+				History7D:   generateMock7D(165.25, 185.75, 1.0),
 				LastUpdated: time.Now(),
 			},
 		},
@@ -73,7 +80,9 @@ func (m *MockFetcher) FetchPair(ctx context.Context, rawInput string) (model.Cry
 		Low24h:      90.00,
 		Volume24h:   10000.00,
 		Change24h:   5.26,
+		Change7D:    3.50,
 		History:     []float64{95, 90, 93, 98, 105, 102, 100},
+		History7D:   generateMock7D(96.6, 100.0, 0.2),
 		LastUpdated: time.Now(),
 	}, nil
 }
@@ -86,4 +95,14 @@ func (m *MockFetcher) FetchPrices(ctx context.Context, symbols []string) ([]mode
 		pairs[i] = p
 	}
 	return pairs, nil
+}
+
+func generateMock7D(start, end float64, phase float64) []float64 {
+	pts := make([]float64, 28)
+	for i := 0; i < 28; i++ {
+		t := float64(i) / 27.0
+		wave := math.Sin(t*3.14159*3.0+phase) * ((end - start) * 0.2)
+		pts[i] = start + (end-start)*t + wave
+	}
+	return pts
 }

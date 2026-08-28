@@ -49,6 +49,12 @@ var (
 			Padding(0, 1).
 			Width(44)
 
+	chartBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(cyanColor).
+			Padding(0, 1).
+			MarginTop(1)
+
 	// Table Header
 	headerStyle = lipgloss.NewStyle().
 			Bold(true).
