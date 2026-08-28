@@ -18,6 +18,30 @@ func (m Model) View() string {
 	b.WriteString(titleStyle.Render(" CRYPTOWATCHER - REAL-TIME DASHBOARD "))
 	b.WriteString("\n\n")
 
+	// Render Candlestick View Mode
+	if m.mode == modeCandlestick {
+		totalWidth := m.width
+		if totalWidth <= 0 {
+			totalWidth = 110
+		}
+		if len(m.pairs) > 0 && m.cursor < len(m.pairs) {
+			chartContent := RenderCandlestickChart(m.pairs[m.cursor], totalWidth-4)
+			b.WriteString(chartBoxStyle.Render(chartContent))
+			b.WriteString("\n\n")
+		}
+
+		lastUpdatedStr := "Never"
+		if !m.lastRefresh.IsZero() {
+			lastUpdatedStr = m.lastRefresh.Format("15:04:05")
+		}
+		controls := fmt.Sprintf(
+			"[v/esc] Back to Watchlist | [↑/↓] Switch Pair (%d/%d) | [r] Refresh | [q] Quit  (Last Updated: %s)",
+			m.cursor+1, len(m.pairs), lastUpdatedStr,
+		)
+		b.WriteString(statusBarStyle.Render(controls))
+		return b.String()
+	}
+
 	// Top Summary Cards Dashboard
 	b.WriteString(m.renderSummaryCards())
 	b.WriteString("\n\n")
@@ -244,7 +268,7 @@ func (m Model) renderFooter() string {
 	}
 
 	controls := fmt.Sprintf(
-		"[a] Add Pair | [d] Remove | [r] Refresh | [↑/↓] Navigate | [q] Quit  (Last Updated: %s)",
+		"[a] Add Pair | [d] Remove | [v] Candlesticks | [r] Refresh | [↑/↓] Navigate | [q] Quit  (Last Updated: %s)",
 		lastUpdatedStr,
 	)
 	sb.WriteString(statusBarStyle.Render(controls))

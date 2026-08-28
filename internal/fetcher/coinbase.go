@@ -47,7 +47,7 @@ func (f *CoinbaseFetcher) SetBaseURL(url string) {
 	f.baseURL = url
 }
 
-// FetchPair retrieves market stats and 7d candles for a single product ID (e.g. BTC-USD).
+// FetchPair retrieves market stats and OHLC candles for a single product ID (e.g. BTC-USD).
 func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model.CryptoPair, error) {
 	symbol, display := NormalizeSymbol(rawInput)
 
@@ -89,13 +89,18 @@ func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model
 
 	history := generateTrendHistory(open, low, high, price)
 
-	// Fetch 7-day candles for multi-line correlation chart
-	history7d, err7d := f.FetchCandles7D(ctx, symbol)
-	var change7d float64
-	if err7d != nil || len(history7d) == 0 {
-		history7d = generate7DTrendHistory(open, low, high, price)
+	// Fetch OHLC candles
+	candles, errOHLC := f.FetchOHLCCandles(ctx, symbol)
+	if errOHLC != nil || len(candles) == 0 {
+		candles = generateFallbackCandles(open, low, high, price)
 	}
 
+	history7d := make([]float64, len(candles))
+	for i, c := range candles {
+		history7d[i] = c.Close
+	}
+
+	var change7d float64
 	if len(history7d) > 0 && history7d[0] > 0 {
 		change7d = ((price - history7d[0]) / history7d[0]) * 100.0
 	}
@@ -112,14 +117,15 @@ func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model
 		Change7D:    change7d,
 		History:     history,
 		History7D:   history7d,
+		Candles:     candles,
 		LastUpdated: time.Now(),
 	}
 
 	return pair, nil
 }
 
-// FetchCandles7D retrieves 7-day historical candle close prices from Coinbase API.
-func (f *CoinbaseFetcher) FetchCandles7D(ctx context.Context, symbol string) ([]float64, error) {
+// FetchOHLCCandles retrieves OHLC candles from Coinbase API.
+func (f *CoinbaseFetcher) FetchOHLCCandles(ctx context.Context, symbol string) ([]model.Candle, error) {
 	reqURL := fmt.Sprintf("%s/products/%s/candles?granularity=21600", f.baseURL, symbol)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
@@ -148,14 +154,22 @@ func (f *CoinbaseFetcher) FetchCandles7D(ctx context.Context, symbol string) ([]
 		raw = raw[:28]
 	}
 
-	prices := make([]float64, len(raw))
+	candles := make([]model.Candle, len(raw))
 	for i := 0; i < len(raw); i++ {
-		if len(raw[i]) >= 5 {
-			prices[len(raw)-1-i] = raw[i][4]
+		if len(raw[i]) >= 6 {
+			idx := len(raw) - 1 - i
+			candles[idx] = model.Candle{
+				Timestamp: time.Unix(int64(raw[i][0]), 0),
+				Low:       raw[i][1],
+				High:      raw[i][2],
+				Open:      raw[i][3],
+				Close:     raw[i][4],
+				Volume:    raw[i][5],
+			}
 		}
 	}
 
-	return prices, nil
+	return candles, nil
 }
 
 // FetchPrices fetches market stats concurrently for a slice of cryptocurrency pair symbols.
@@ -201,15 +215,39 @@ func generateTrendHistory(open, low, high, price float64) []float64 {
 	}
 }
 
-func generate7DTrendHistory(open, low, high, price float64) []float64 {
+func generateFallbackCandles(open, low, high, price float64) []model.Candle {
 	base := open * 0.95
 	if base == 0 {
 		base = price * 0.95
 	}
-	res := make([]float64, 28)
+	candles := make([]model.Candle, 28)
+	now := time.Now()
+
 	for i := 0; i < 28; i++ {
+		t := now.Add(time.Duration(i-28) * 6 * time.Hour)
 		ratio := float64(i) / 27.0
-		res[i] = base + (price-base)*ratio
+		cOpen := base + (price-base)*ratio
+		cClose := cOpen * 1.002
+		if i%3 == 1 {
+			cClose = cOpen * 0.997
+		}
+		cHigh := cOpen * 1.008
+		cLow := cOpen * 0.993
+		if cHigh < cClose {
+			cHigh = cClose * 1.002
+		}
+		if cLow > cClose {
+			cLow = cClose * 0.998
+		}
+
+		candles[i] = model.Candle{
+			Timestamp: t,
+			Open:      cOpen,
+			High:      cHigh,
+			Low:       cLow,
+			Close:     cClose,
+			Volume:    1000.0 * (1.0 + ratio),
+		}
 	}
-	return res
+	return candles
 }

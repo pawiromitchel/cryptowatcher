@@ -19,6 +19,7 @@ type viewMode int
 const (
 	modeNormal viewMode = iota
 	modeAdd
+	modeCandlestick
 )
 
 // Messages
@@ -191,6 +192,31 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		if m.mode == modeCandlestick {
+			switch msg.String() {
+			case "q", "ctrl+c":
+				return m, tea.Quit
+			case "v", "c", "esc":
+				m.mode = modeNormal
+				return m, nil
+			case "up", "k":
+				if m.cursor > 0 {
+					m.cursor--
+				}
+				return m, nil
+			case "down", "j":
+				if m.cursor < len(m.pairs)-1 {
+					m.cursor++
+				}
+				return m, nil
+			case "r":
+				m.loading = true
+				m.statusMsg = "Refreshing prices..."
+				cmds = append(cmds, m.fetchPricesCmd())
+				return m, tea.Batch(cmds...)
+			}
+		}
+
 		// Normal Mode Keybindings
 		switch msg.String() {
 		case "q", "ctrl+c":
@@ -204,6 +230,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "down", "j":
 			if m.cursor < len(m.pairs)-1 {
 				m.cursor++
+			}
+
+		case "v", "c":
+			if len(m.pairs) > 0 {
+				m.mode = modeCandlestick
 			}
 
 		case "a", "+":

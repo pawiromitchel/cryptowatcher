@@ -159,6 +159,28 @@ func TestRenderMultiLineChart(t *testing.T) {
 	}
 }
 
+func TestRenderCandlestickChart(t *testing.T) {
+	cfg := model.DefaultConfig()
+	mockFetcher := fetcher.NewMockFetcher()
+	pairs, err := mockFetcher.FetchPrices(context.Background(), cfg.Pairs)
+	if err != nil {
+		t.Fatalf("failed to fetch mock prices: %v", err)
+	}
+
+	if len(pairs) == 0 {
+		t.Fatalf("expected at least one pair")
+	}
+
+	candleStr := RenderCandlestickChart(pairs[0], 80)
+	if candleStr == "" {
+		t.Fatalf("expected non-empty candlestick chart string")
+	}
+
+	if !containsSubstring(candleStr, "CANDLESTICK CHART") {
+		t.Errorf("expected CANDLESTICK CHART in output, got: %s", candleStr)
+	}
+}
+
 func containsSubstring(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || (len(s) > len(sub) && stringSearch(s, sub)))
 }

@@ -15,6 +15,10 @@ type MockFetcher struct {
 
 // NewMockFetcher initializes a MockFetcher populated with default crypto pair data.
 func NewMockFetcher() *MockFetcher {
+	btcCandles := generateMockOHLC(91600.00, 96420.50, 0.0)
+	ethCandles := generateMockOHLC(2792.00, 2750.25, 0.5)
+	solCandles := generateMockOHLC(165.25, 185.75, 1.0)
+
 	return &MockFetcher{
 		MockData: map[string]model.CryptoPair{
 			"BTC-USD": {
@@ -28,7 +32,8 @@ func NewMockFetcher() *MockFetcher {
 				Change24h:   2.46,
 				Change7D:    5.20,
 				History:     []float64{94100, 94500, 93800, 95200, 96000, 97100, 96800, 96420.50},
-				History7D:   generateMock7D(91600.00, 96420.50, 0.0),
+				History7D:   extractCloses(btcCandles),
+				Candles:     btcCandles,
 				LastUpdated: time.Now(),
 			},
 			"ETH-USD": {
@@ -42,7 +47,8 @@ func NewMockFetcher() *MockFetcher {
 				Change24h:   -2.12,
 				Change7D:    -1.50,
 				History:     []float64{2810, 2840, 2820, 2790, 2750, 2710, 2730, 2750.25},
-				History7D:   generateMock7D(2792.00, 2750.25, 0.5),
+				History7D:   extractCloses(ethCandles),
+				Candles:     ethCandles,
 				LastUpdated: time.Now(),
 			},
 			"SOL-USD": {
@@ -56,7 +62,8 @@ func NewMockFetcher() *MockFetcher {
 				Change24h:   6.14,
 				Change7D:    12.40,
 				History:     []float64{175, 173.2, 178, 182, 186, 189.5, 184, 185.75},
-				History7D:   generateMock7D(165.25, 185.75, 1.0),
+				History7D:   extractCloses(solCandles),
+				Candles:     solCandles,
 				LastUpdated: time.Now(),
 			},
 		},
@@ -71,6 +78,7 @@ func (m *MockFetcher) FetchPair(ctx context.Context, rawInput string) (model.Cry
 		return pair, nil
 	}
 
+	mockCandles := generateMockOHLC(96.6, 100.0, 0.2)
 	return model.CryptoPair{
 		Symbol:      symbol,
 		Display:     display,
@@ -82,7 +90,8 @@ func (m *MockFetcher) FetchPair(ctx context.Context, rawInput string) (model.Cry
 		Change24h:   5.26,
 		Change7D:    3.50,
 		History:     []float64{95, 90, 93, 98, 105, 102, 100},
-		History7D:   generateMock7D(96.6, 100.0, 0.2),
+		History7D:   extractCloses(mockCandles),
+		Candles:     mockCandles,
 		LastUpdated: time.Now(),
 	}, nil
 }
@@ -97,12 +106,34 @@ func (m *MockFetcher) FetchPrices(ctx context.Context, symbols []string) ([]mode
 	return pairs, nil
 }
 
-func generateMock7D(start, end float64, phase float64) []float64 {
-	pts := make([]float64, 28)
+func generateMockOHLC(start, end float64, phase float64) []model.Candle {
+	candles := make([]model.Candle, 28)
+	now := time.Now()
+
 	for i := 0; i < 28; i++ {
 		t := float64(i) / 27.0
 		wave := math.Sin(t*3.14159*3.0+phase) * ((end - start) * 0.2)
-		pts[i] = start + (end-start)*t + wave
+		cOpen := start + (end-start)*t + wave
+		cClose := cOpen * (1.0 + math.Cos(t*10.0)*0.015)
+		cHigh := math.Max(cOpen, cClose) * 1.01
+		cLow := math.Min(cOpen, cClose) * 0.99
+
+		candles[i] = model.Candle{
+			Timestamp: now.Add(time.Duration(i-28) * 6 * time.Hour),
+			Open:      cOpen,
+			High:      cHigh,
+			Low:       cLow,
+			Close:     cClose,
+			Volume:    5000.0 * (1.0 + t),
+		}
 	}
-	return pts
+	return candles
+}
+
+func extractCloses(candles []model.Candle) []float64 {
+	closes := make([]float64, len(candles))
+	for i, c := range candles {
+		closes[i] = c.Close
+	}
+	return closes
 }
