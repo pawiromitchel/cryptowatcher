@@ -128,6 +128,18 @@ func TestFormatVolume(t *testing.T) {
 	}
 }
 
+func TestSparklineAndRangeBar(t *testing.T) {
+	sparkline := RenderSparkline([]float64{10, 15, 20, 25, 30}, true)
+	if sparkline == "" {
+		t.Errorf("expected non-empty sparkline string")
+	}
+
+	rangeBar := RenderRangeBar(150, 100, 200, 10)
+	if rangeBar == "" {
+		t.Errorf("expected non-empty range bar string")
+	}
+}
+
 func containsSubstring(s, sub string) bool {
 	return len(s) >= len(sub) && (s == sub || (len(s) > len(sub) && stringSearch(s, sub)))
 }

@@ -25,6 +25,7 @@ func NewMockFetcher() *MockFetcher {
 				Low24h:      93800.00,
 				Volume24h:   24510.33,
 				Change24h:   2.46,
+				History:     []float64{94100, 94500, 93800, 95200, 96000, 97100, 96800, 96420.50},
 				LastUpdated: time.Now(),
 			},
 			"ETH-USD": {
@@ -36,6 +37,7 @@ func NewMockFetcher() *MockFetcher {
 				Low24h:      2710.00,
 				Volume24h:   184200.50,
 				Change24h:   -2.12,
+				History:     []float64{2810, 2840, 2820, 2790, 2750, 2710, 2730, 2750.25},
 				LastUpdated: time.Now(),
 			},
 			"SOL-USD": {
@@ -47,6 +49,7 @@ func NewMockFetcher() *MockFetcher {
 				Low24h:      173.20,
 				Volume24h:   892000.10,
 				Change24h:   6.14,
+				History:     []float64{175, 173.2, 178, 182, 186, 189.5, 184, 185.75},
 				LastUpdated: time.Now(),
 			},
 		},
@@ -70,6 +73,7 @@ func (m *MockFetcher) FetchPair(ctx context.Context, rawInput string) (model.Cry
 		Low24h:      90.00,
 		Volume24h:   10000.00,
 		Change24h:   5.26,
+		History:     []float64{95, 90, 93, 98, 105, 102, 100},
 		LastUpdated: time.Now(),
 	}, nil
 }

@@ -15,11 +15,22 @@ func (m Model) View() string {
 	var b strings.Builder
 
 	// Header Banner
-	b.WriteString(titleStyle.Render(" CRYPTOWATCHER "))
+	b.WriteString(titleStyle.Render(" CRYPTOWATCHER - REAL-TIME DASHBOARD "))
 	b.WriteString("\n\n")
 
-	// Main Watchlist Table
-	b.WriteString(m.renderTable())
+	// Top Summary Cards Dashboard
+	b.WriteString(m.renderSummaryCards())
+	b.WriteString("\n\n")
+
+	// Split View: Main Table (Left) + Detailed Inspector Panel (Right)
+	tableStr := m.renderTable()
+	tableBox := tableBoxStyle.Render(tableStr)
+
+	panelStr := m.renderInspectorPanel()
+	panelBox := panelBoxStyle.Render(panelStr)
+
+	mainContent := lipgloss.JoinHorizontal(lipgloss.Top, tableBox, "  ", panelBox)
+	b.WriteString(mainContent)
 	b.WriteString("\n")
 
 	// Modal Overlay for Adding Pairs
@@ -39,12 +50,49 @@ func (m Model) View() string {
 	return b.String()
 }
 
+func (m Model) renderSummaryCards() string {
+	if len(m.pairs) == 0 {
+		return ""
+	}
+
+	totalPairs := len(m.pairs)
+	bestPair := m.pairs[0]
+	worstPair := m.pairs[0]
+
+	for _, p := range m.pairs {
+		if p.Change24h > bestPair.Change24h {
+			bestPair = p
+		}
+		if p.Change24h < worstPair.Change24h {
+			worstPair = p
+		}
+	}
+
+	c1 := summaryCardStyle.Render(fmt.Sprintf("PAIRS\n%s", summaryValueStyle.Render(fmt.Sprintf("%d Monitored", totalPairs))))
+
+	bestStr := fmt.Sprintf("%s (%s)", bestPair.Display, formatChange(bestPair.Change24h))
+	c2 := summaryCardStyle.Render(fmt.Sprintf("TOP GAINER\n%s", bestStr))
+
+	worstStr := fmt.Sprintf("%s (%s)", worstPair.Display, formatChange(worstPair.Change24h))
+	c3 := summaryCardStyle.Render(fmt.Sprintf("TOP LOSER\n%s", worstStr))
+
+	statusText := "🟢 LIVE (Coinbase API)"
+	if m.loading {
+		statusText = "🟡 UPDATING..."
+	} else if m.err != nil {
+		statusText = "🔴 ERROR"
+	}
+	c4 := summaryCardStyle.Render(fmt.Sprintf("STATUS\n%s", summaryValueStyle.Render(statusText)))
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, c1, c2, c3, c4)
+}
+
 func (m Model) renderTable() string {
 	var sb strings.Builder
 
 	// Column header
 	header := fmt.Sprintf(
-		"%-3s %-12s %-14s %-12s %-14s %-14s %-14s",
+		"%-3s %-10s %-14s %-12s %-12s %-12s %-12s",
 		"", "PAIR", "PRICE (USD)", "24H CHANGE", "24H HIGH", "24H LOW", "24H VOLUME",
 	)
 	sb.WriteString(headerStyle.Render(header))
@@ -73,16 +121,15 @@ func (m Model) renderTable() string {
 			changeStr = "-"
 		}
 
-		// Use padRight with lipgloss.Width to ensure ANSI colors do not corrupt column alignment
 		rowContent := fmt.Sprintf(
 			"%s %s %s %s %s %s %s",
 			padRight(cursorStr, 3),
-			padRight(pair.Display, 12),
+			padRight(pair.Display, 10),
 			padRight(priceStr, 14),
 			padRight(changeStr, 12),
-			padRight(highStr, 14),
-			padRight(lowStr, 14),
-			padRight(volStr, 14),
+			padRight(highStr, 12),
+			padRight(lowStr, 12),
+			padRight(volStr, 12),
 		)
 
 		if i == m.cursor {
@@ -92,6 +139,57 @@ func (m Model) renderTable() string {
 		}
 		sb.WriteString("\n")
 	}
+
+	return sb.String()
+}
+
+func (m Model) renderInspectorPanel() string {
+	var sb strings.Builder
+
+	if len(m.pairs) == 0 || m.cursor >= len(m.pairs) {
+		sb.WriteString(subHeaderStyle.Render("INSPECTOR"))
+		sb.WriteString("\n\nNo pair selected.")
+		return sb.String()
+	}
+
+	pair := m.pairs[m.cursor]
+
+	sb.WriteString(subHeaderStyle.Render(fmt.Sprintf("🔍 %s MARKET INSPECTOR", pair.Display)))
+	sb.WriteString("\n\n")
+
+	// Price & 24h Badge
+	priceStr := formatPrice(pair.Price)
+	changeStr := formatChange(pair.Change24h)
+	sb.WriteString(fmt.Sprintf("Spot Price:  %s   (%s)\n\n", summaryValueStyle.Render(priceStr), changeStr))
+
+	// 24H Price Range Bar Slider
+	sb.WriteString("24H Price Range:\n")
+	rangeBar := RenderRangeBar(pair.Price, pair.Low24h, pair.High24h, 24)
+	sb.WriteString(fmt.Sprintf("%s %s %s\n\n", formatPrice(pair.Low24h), rangeBar, formatPrice(pair.High24h)))
+
+	// 24H Sparkline Trend
+	sb.WriteString("24H Trend Sparkline:\n")
+	sparkline := RenderSparkline(pair.History, pair.Change24h >= 0)
+	sb.WriteString(fmt.Sprintf("  %s\n\n", sparkline))
+
+	// Detailed Metrics Breakdown
+	spread := pair.High24h - pair.Low24h
+	spreadPct := 0.0
+	if pair.Low24h > 0 {
+		spreadPct = (spread / pair.Low24h) * 100.0
+	}
+
+	sb.WriteString(fmt.Sprintf("%-16s %s\n", "24h Open:", formatPrice(pair.Open24h)))
+	sb.WriteString(fmt.Sprintf("%-16s %s\n", "24h High:", formatPrice(pair.High24h)))
+	sb.WriteString(fmt.Sprintf("%-16s %s\n", "24h Low:", formatPrice(pair.Low24h)))
+	sb.WriteString(fmt.Sprintf("%-16s %s (%.2f%%)\n", "24h Spread:", formatPrice(spread), spreadPct))
+	sb.WriteString(fmt.Sprintf("%-16s %s\n", "24h Volume:", formatVolume(pair.Volume24h)))
+
+	updatedTime := "Never"
+	if !pair.LastUpdated.IsZero() {
+		updatedTime = pair.LastUpdated.Format("15:04:05")
+	}
+	sb.WriteString(fmt.Sprintf("%-16s %s\n", "Last Sync:", updatedTime))
 
 	return sb.String()
 }

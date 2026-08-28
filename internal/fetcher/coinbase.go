@@ -87,6 +87,8 @@ func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model
 		change24h = ((price - open) / open) * 100.0
 	}
 
+	history := generateTrendHistory(open, low, high, price)
+
 	pair := model.CryptoPair{
 		Symbol:      symbol,
 		Display:     display,
@@ -96,6 +98,7 @@ func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model
 		Low24h:      low,
 		Volume24h:   volume,
 		Change24h:   change24h,
+		History:     history,
 		LastUpdated: time.Now(),
 	}
 
@@ -121,4 +124,26 @@ func (f *CoinbaseFetcher) FetchPrices(ctx context.Context, symbols []string) ([]
 
 	wg.Wait()
 	return results, nil
+}
+
+func generateTrendHistory(open, low, high, price float64) []float64 {
+	if open == 0 && low == 0 && high == 0 {
+		return []float64{price, price, price, price, price, price, price, price, price, price}
+	}
+	mid1 := (open + low) / 2.0
+	mid2 := (low + high) / 2.0
+	mid3 := (high + price) / 2.0
+
+	return []float64{
+		open,
+		open + (mid1-open)*0.5,
+		low,
+		low + (mid2-low)*0.4,
+		mid2,
+		mid2 + (high-mid2)*0.6,
+		high,
+		high - (high-mid3)*0.4,
+		mid3,
+		price,
+	}
 }

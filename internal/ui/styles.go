@@ -10,7 +10,7 @@ var (
 	redColor       = lipgloss.Color("196") // Bright Red
 	grayColor      = lipgloss.Color("240") // Dark Gray
 	lightGrayColor = lipgloss.Color("250") // Light Gray
-	bgColor        = lipgloss.Color("235") // Background dark shade
+	cyanColor      = lipgloss.Color("86")  // Cyan / Teal
 
 	// Title Banner
 	titleStyle = lipgloss.NewStyle().
@@ -19,6 +19,35 @@ var (
 			Background(primaryColor).
 			Padding(0, 2).
 			MarginBottom(1)
+
+	// Subtitle / Section Headers
+	subHeaderStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(cyanColor).
+			MarginBottom(1)
+
+	// Summary Cards Header Top
+	summaryCardStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(grayColor).
+				Padding(0, 1).
+				MarginRight(1)
+
+	summaryValueStyle = lipgloss.NewStyle().
+				Bold(true).
+				Foreground(lipgloss.Color("255"))
+
+	// Container Boxes
+	tableBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(primaryColor).
+			Padding(0, 1)
+
+	panelBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(accentColor).
+			Padding(0, 1).
+			Width(44)
 
 	// Table Header
 	headerStyle = lipgloss.NewStyle().
