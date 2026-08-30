@@ -5,6 +5,8 @@ A real-time Terminal User Interface (TUI) stocks and cryptocurrency dashboard in
 ![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
+<img width="2257" height="2215" alt="bettershot_1788104229515" src="https://github.com/user-attachments/assets/7a3d5e5f-c2ff-4676-bc89-67fe9c3e9bf2" />
+
 ---
 
 ## Features
