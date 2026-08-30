@@ -119,7 +119,7 @@ func (m Model) renderSummaryCards() string {
 	worstStr := fmt.Sprintf("%s (%s)", worstPair.Display, formatChange(worstPair.Change24h))
 	c3 := summaryCardStyle.Render(fmt.Sprintf("TOP LOSER\n%s", worstStr))
 
-	statusText := "🟢 LIVE (Multi-Feed: Coinbase & Yahoo)"
+	statusText := "🟢 LIVE (Coinbase, CoinGecko & Yahoo)"
 	if m.loading {
 		statusText = "🟡 UPDATING..."
 	} else if m.err != nil {

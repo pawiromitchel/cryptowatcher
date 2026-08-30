@@ -43,6 +43,7 @@ func main() {
 	} else {
 		priceFetcher = fetcher.NewMultiFetcher(
 			fetcher.NewCoinbaseFetcher(),
+			fetcher.NewCoinGeckoFetcher(),
 			fetcher.NewPythFetcher(),
 		)
 	}

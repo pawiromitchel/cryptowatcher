@@ -22,6 +22,7 @@ func TestNormalizeSymbol(t *testing.T) {
 		{"aapl", "AAPL", "AAPL"},
 		{"tsla", "TSLA", "TSLA"},
 		{"spy", "SPY", "S&P 500"},
+		{"hmm", "HMM-USD", "HMM/USD"},
 		{"", "", ""},
 	}
 
@@ -89,6 +90,55 @@ func TestCoinbaseFetcher_NotFound(t *testing.T) {
 	}
 }
 
+func TestCoinGeckoFetcher_FetchPair(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/coins/thinking-cat" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{
+				"id": "thinking-cat",
+				"symbol": "hmm",
+				"name": "Thinking Cat",
+				"market_data": {
+					"current_price": {"usd": 0.029},
+					"market_cap": {"usd": 29000000},
+					"total_volume": {"usd": 4000000},
+					"high_24h": {"usd": 0.033},
+					"low_24h": {"usd": 0.015},
+					"price_change_percentage_24h": 16.38,
+					"sparkline_7d": {
+						"price": [0.012, 0.015, 0.020, 0.025, 0.029]
+					}
+				}
+			}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	geckoFetcher := NewCoinGeckoFetcher()
+	geckoFetcher.SetBaseURL(server.URL)
+
+	ctx := context.Background()
+	pair, err := geckoFetcher.FetchPair(ctx, "HMM")
+	if err != nil {
+		t.Fatalf("unexpected gecko fetch error: %v", err)
+	}
+
+	if pair.Symbol != "HMM-USD" {
+		t.Errorf("expected symbol HMM-USD, got %s", pair.Symbol)
+	}
+	if pair.Name != "Thinking Cat" {
+		t.Errorf("expected name Thinking Cat, got %s", pair.Name)
+	}
+	if pair.Price != 0.029 {
+		t.Errorf("expected price 0.029, got %f", pair.Price)
+	}
+	if pair.MarketCap != "$29.0M" {
+		t.Errorf("expected market cap $29.0M, got %s", pair.MarketCap)
+	}
+}
+
 func TestPythFetcher_FetchPair(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v8/finance/chart/AAPL" {
@@ -151,6 +201,29 @@ func TestMultiFetcher_CascadingFallback(t *testing.T) {
 	}))
 	defer cbServer.Close()
 
+	geckoServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/coins/thinking-cat" {
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte(`{
+				"id": "thinking-cat",
+				"symbol": "hmm",
+				"name": "Thinking Cat",
+				"market_data": {
+					"current_price": {"usd": 0.029},
+					"market_cap": {"usd": 29000000},
+					"total_volume": {"usd": 4000000},
+					"high_24h": {"usd": 0.033},
+					"low_24h": {"usd": 0.015},
+					"price_change_percentage_24h": 16.38,
+					"sparkline_7d": {"price": [0.012, 0.029]}
+				}
+			}`))
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer geckoServer.Close()
+
 	equityServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/v8/finance/chart/AAPL" {
 			w.WriteHeader(http.StatusOK)
@@ -184,10 +257,13 @@ func TestMultiFetcher_CascadingFallback(t *testing.T) {
 	cbFetcher := NewCoinbaseFetcher()
 	cbFetcher.SetBaseURL(cbServer.URL)
 
+	geckoFetcher := NewCoinGeckoFetcher()
+	geckoFetcher.SetBaseURL(geckoServer.URL)
+
 	equityFetcher := NewPythFetcher()
 	equityFetcher.SetBaseURL(equityServer.URL)
 
-	multi := NewMultiFetcher(cbFetcher, equityFetcher)
+	multi := NewMultiFetcher(cbFetcher, geckoFetcher, equityFetcher)
 	ctx := context.Background()
 
 	// 1. BTC should resolve via Coinbase
@@ -199,7 +275,16 @@ func TestMultiFetcher_CascadingFallback(t *testing.T) {
 		t.Errorf("expected BTC price 94000, got %f", btc.Price)
 	}
 
-	// 2. AAPL should cascade to Equity fetcher
+	// 2. HMM should cascade to CoinGecko
+	hmm, err := multi.FetchPair(ctx, "HMM")
+	if err != nil {
+		t.Fatalf("failed to fetch HMM via multi fetcher: %v", err)
+	}
+	if hmm.Price != 0.029 {
+		t.Errorf("expected HMM price 0.029, got %f", hmm.Price)
+	}
+
+	// 3. AAPL should cascade to Equity fetcher
 	aapl, err := multi.FetchPair(ctx, "AAPL")
 	if err != nil {
 		t.Fatalf("failed to fetch AAPL via multi fetcher: %v", err)

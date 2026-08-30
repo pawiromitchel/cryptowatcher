@@ -43,6 +43,10 @@ var assetNames = map[string]string{
 	"COIN":  "Coinbase Global",
 	"COINC": "Coinbase (Base)",
 	"QQQ":   "Invesco QQQ Trust",
+	"HMM":   "Thinking Cat",
+	"PEPE":  "Pepe",
+	"WIF":   "dogwifhat",
+	"BONK":  "Bonk",
 }
 
 // Known stock tickers set

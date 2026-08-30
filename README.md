@@ -18,9 +18,10 @@ A real-time Terminal User Interface (TUI) stocks and cryptocurrency dashboard in
   - **🪙 Cryptocurrency**: Bitcoin, Ethereum, Solana, Dogecoin, Avalanche, etc.
   - **📈 Stocks & Equities**: S&P 500 (`SPY`), Tesla (`TSLA`), Alphabet (`GOOGL`), Apple (`AAPL`), NVIDIA (`NVDA`), etc.
 - **Composite Multi-Feed Engine (`MultiFetcher`)**:
-  - **Coinbase Exchange REST API**: High-frequency orderbook data and 24-hour hourly candle series for crypto.
-  - **Equity Market Feed**: Intraday 15-minute price quotes and historical trends for US stocks and ETFs.
-  - **Smart Routing & Auto-Categorization**: Enter any symbol (e.g. `NVDA`, `DOGE`, `AAPL`, `SOL`) and the engine automatically routes, fetches, and appends it to the matching category.
+  - **Coinbase Exchange REST API**: High-frequency orderbook data and 24-hour hourly candle series for crypto pairs (`BTC`, `ETH`, `SOL`, `DOGE`).
+  - **CoinGecko REST API**: Dynamic resolution for thousands of altcoins, meme tokens, and on-chain assets (e.g. `HMM` / Thinking Cat, `PEPE`, `WIF`, `BONK`, `RENDER`).
+  - **Equity Market Feed**: Intraday 15-minute price quotes and historical trends for US stocks and ETFs (`SPY`, `TSLA`, `GOOGL`, `AAPL`, `NVDA`).
+  - **Smart Routing & Auto-Categorization**: Enter any symbol (e.g. `HMM`, `NVDA`, `DOGE`, `AAPL`, `SOL`) and the engine automatically routes, fetches, and appends it to the matching category.
 - **2D Interactive Grid Navigation**: Navigate horizontally and vertically across widget cards and category sections using arrow keys or Vim keys (`h`/`j`/`k`/`l`).
 - **Persistent Configuration**: Watchlists automatically persist across runs in `~/.config/cryptowatcher/config.json`.
 - **Top Summary Dashboard**: Real-time asset count, top 24h gainer, top 24h loser, and feed connection status.
