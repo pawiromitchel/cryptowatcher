@@ -29,15 +29,33 @@ A real-time Terminal User Interface (TUI) stocks and cryptocurrency dashboard in
 
 ## Installation
 
-### Prerequisites
-- Go 1.22+ installed on your system.
+### Pre-built Binaries (Recommended)
+
+Download the pre-compiled binary for your operating system from the [Latest GitHub Release](https://github.com/pawiromitchel/cryptowatcher/releases/latest):
+
+| Platform | Architecture | Binary Package |
+| :--- | :--- | :--- |
+| **macOS** | Apple Silicon (M1/M2/M3/M4) | `cryptowatcher-darwin-arm64.tar.gz` |
+| **macOS** | Intel x86_64 | `cryptowatcher-darwin-amd64.tar.gz` |
+| **Linux** | x86_64 | `cryptowatcher-linux-amd64.tar.gz` |
+| **Linux** | ARM64 / Raspberry Pi | `cryptowatcher-linux-arm64.tar.gz` |
+| **Windows**| 64-bit | `cryptowatcher-windows-amd64.exe.zip` |
+
+**Quick run (macOS / Linux):**
+```bash
+tar -xzf cryptowatcher-darwin-arm64.tar.gz
+chmod +x cryptowatcher-darwin-arm64
+./cryptowatcher-darwin-arm64
+```
 
 ### Build from Source
+
+Prerequisites: Go 1.22+ installed.
 
 ```bash
 git clone git@github.com:pawiromitchel/cryptowatcher.git
 cd cryptowatcher
-go build -o cryptowatcher ./cmd/cryptowatcher
+make build
 ./cryptowatcher
 ```
 
