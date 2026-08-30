@@ -155,13 +155,13 @@ func (m Model) fetchPricesCmd() tea.Cmd {
 // addPairCmd asynchronously fetches data for a single newly added ticker.
 func (m Model) addPairCmd(rawInput string) tea.Cmd {
 	return func() tea.Msg {
-		ctx, cancel := context.WithTimeout(context.Background(), 6*time.Second)
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
 
 		assetType := fetcher.DetectAssetType(rawInput)
 		pair, err := m.fetcher.FetchPair(ctx, rawInput)
-		if err == nil {
-			pair.Type = assetType
+		if err == nil && pair.Type != "" {
+			assetType = pair.Type
 		}
 		return addedPairMsg{pair: pair, assetType: assetType, err: err}
 	}
