@@ -72,7 +72,7 @@ func (f *PythFetcher) SetBaseURL(url string) {
 	f.baseURL = url
 }
 
-// FetchPair retrieves market data and price history for a stock or equity symbol.
+// FetchPair retrieves market data and intraday price history for a stock or equity symbol.
 func (f *PythFetcher) FetchPair(ctx context.Context, rawInput string) (model.CryptoPair, error) {
 	symbol, display := NormalizeSymbol(rawInput)
 	baseTicker := extractBaseTicker(symbol)
@@ -83,11 +83,10 @@ func (f *PythFetcher) FetchPair(ctx context.Context, rawInput string) (model.Cry
 		querySymbol = "SPY"
 	}
 	if strings.HasSuffix(querySymbol, "C") && len(querySymbol) > 3 {
-		// Map Base tokenized stock ticker (e.g. AAPLC -> AAPL)
 		querySymbol = strings.TrimSuffix(querySymbol, "C")
 	}
 
-	reqURL := fmt.Sprintf("%s/v8/finance/chart/%s?interval=1d&range=5d", f.baseURL, querySymbol)
+	reqURL := fmt.Sprintf("%s/v8/finance/chart/%s?interval=15m&range=1d", f.baseURL, querySymbol)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return model.CryptoPair{Symbol: symbol, Display: display, Err: err}, err
@@ -133,7 +132,7 @@ func (f *PythFetcher) FetchPair(ctx context.Context, rawInput string) (model.Cry
 	}
 	volume24h := res.Meta.RegularMarketVolume
 
-	// Extract history closes for inline mini line chart
+	// Extract intraday 15m closes for high-res mini line chart
 	var history []float64
 	if len(res.Indicators.Quote) > 0 && len(res.Indicators.Quote[0].Close) > 0 {
 		rawCloses := res.Indicators.Quote[0].Close

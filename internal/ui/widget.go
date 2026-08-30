@@ -10,7 +10,7 @@ import (
 	"cryptowatcher/internal/model"
 )
 
-// RenderWidgetCard renders an individual macOS Stocks-style widget box for a ticker.
+// RenderWidgetCard renders a tall, prominent macOS Stocks-style widget box for a ticker.
 func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) string {
 	innerWidth := cardWidth - 4
 	if innerWidth < 22 {
@@ -36,7 +36,7 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) str
 	line1 := symStr + strings.Repeat(" ", space1) + capStr
 
 	// 2. Subhead: Asset Name + 24h Change %
-	nameStr := widgetNameStyle.Render(truncateString(item.Name, 13))
+	nameStr := widgetNameStyle.Render(truncateString(item.Name, 14))
 	changeStr := formatChange(item.Change24h)
 	space2 := innerWidth - lipgloss.Width(nameStr) - lipgloss.Width(changeStr)
 	if space2 < 1 {
@@ -44,12 +44,12 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) str
 	}
 	line2 := nameStr + strings.Repeat(" ", space2) + changeStr
 
-	// 3. Mini Inline Braille Chart with Dotted Baseline
+	// 3. Tall 3-Row Mini Inline Braille Line Chart
 	chartWidth := innerWidth - 2
-	miniChart := renderWidgetMiniChart(item.History, isBullish, chartWidth)
+	miniChart := renderWidgetMiniChart(item.History, isBullish, chartWidth, 3)
 	baseLine := lipgloss.NewStyle().Foreground(grayColor).Render(strings.Repeat("┄", chartWidth))
 
-	// 4. Large Price
+	// 4. Large Bold Price
 	priceStr := widgetPriceStyle.Render(formatPrice(item.Price))
 	if item.Err != nil {
 		priceStr = errorStyle.Render("Error")
@@ -60,7 +60,7 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) str
 	}
 	linePrice := strings.Repeat(" ", spacePrice) + priceStr
 
-	content := fmt.Sprintf("%s\n%s\n\n  %s\n  %s\n%s",
+	content := fmt.Sprintf("%s\n%s\n\n%s\n  %s\n\n%s",
 		line1,
 		line2,
 		miniChart,
@@ -74,16 +74,31 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) str
 	return widgetCardStyle.Width(cardWidth).Render(content)
 }
 
-func renderWidgetMiniChart(history []float64, isBullish bool, width int) string {
+func renderWidgetMiniChart(history []float64, isBullish bool, width int, chartRows int) string {
+	if chartRows < 1 {
+		chartRows = 3
+	}
+
 	if len(history) < 2 {
-		if isBullish {
-			return positiveStyle.Render(strings.Repeat("⠒", width))
+		var sb strings.Builder
+		for r := 0; r < chartRows; r++ {
+			if r == chartRows-1 {
+				sb.WriteString("  " + strings.Repeat("⠒", width))
+			} else {
+				sb.WriteString("  " + strings.Repeat(" ", width))
+			}
+			if r < chartRows-1 {
+				sb.WriteString("\n")
+			}
 		}
-		return negativeStyle.Render(strings.Repeat("⠒", width))
+		if isBullish {
+			return positiveStyle.Render(sb.String())
+		}
+		return negativeStyle.Render(sb.String())
 	}
 
 	subWidth := width * 2
-	subHeight := 4 // 1 character row has 4 sub-pixel dots vertically
+	subHeight := chartRows * 4 // each character row has 4 sub-pixels vertically
 
 	minVal := history[0]
 	maxVal := history[0]
@@ -101,8 +116,10 @@ func renderWidgetMiniChart(history []float64, isBullish bool, width int) string 
 		diff = 1.0
 	}
 
-	subGrid := make([][]uint8, 1)
-	subGrid[0] = make([]uint8, width)
+	subGrid := make([][]uint8, chartRows)
+	for r := 0; r < chartRows; r++ {
+		subGrid[r] = make([]uint8, width)
+	}
 
 	numPts := len(history)
 	pts := make([][2]int, numPts)
@@ -124,21 +141,31 @@ func renderWidgetMiniChart(history []float64, isBullish bool, width int) string 
 	}
 
 	var sb strings.Builder
-	for c := 0; c < width; c++ {
-		bitmask := subGrid[0][c]
-		if bitmask > 0 {
-			rRune := rune(0x2800 + uint16(bitmask))
-			sb.WriteRune(rRune)
+	for r := 0; r < chartRows; r++ {
+		sb.WriteString("  ")
+		var rowSb strings.Builder
+		for c := 0; c < width; c++ {
+			bitmask := subGrid[r][c]
+			if bitmask > 0 {
+				rRune := rune(0x2800 + uint16(bitmask))
+				rowSb.WriteRune(rRune)
+			} else {
+				rowSb.WriteRune(' ')
+			}
+		}
+
+		if isBullish {
+			sb.WriteString(positiveStyle.Render(rowSb.String()))
 		} else {
-			sb.WriteRune('⠒')
+			sb.WriteString(negativeStyle.Render(rowSb.String()))
+		}
+
+		if r < chartRows-1 {
+			sb.WriteString("\n")
 		}
 	}
 
-	chartStr := sb.String()
-	if isBullish {
-		return positiveStyle.Render(chartStr)
-	}
-	return negativeStyle.Render(chartStr)
+	return sb.String()
 }
 
 func drawWidgetSubLine(subGrid [][]uint8, x0, y0, x1, y1 int) {

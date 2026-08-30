@@ -47,7 +47,7 @@ func (f *CoinbaseFetcher) SetBaseURL(url string) {
 	f.baseURL = url
 }
 
-// FetchPair retrieves market stats and 7d candles for a single product ID (e.g. BTC-USD).
+// FetchPair retrieves market stats and 24h candle history for a product ID (e.g. BTC-USD).
 func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model.CryptoPair, error) {
 	symbol, display := NormalizeSymbol(rawInput)
 
@@ -87,17 +87,10 @@ func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model
 		change24h = ((price - open) / open) * 100.0
 	}
 
-	history := generateTrendHistory(open, low, high, price)
-
-	// Fetch 7-day candles for multi-line correlation chart
-	history7d, err7d := f.FetchCandles7D(ctx, symbol)
-	var change7d float64
-	if err7d != nil || len(history7d) == 0 {
-		history7d = generate7DTrendHistory(open, low, high, price)
-	}
-
-	if len(history7d) > 0 && history7d[0] > 0 {
-		change7d = ((price - history7d[0]) / history7d[0]) * 100.0
+	// Fetch 24h 1-hour candles for detailed widget mini-chart curve
+	history, errHist := f.FetchCandles24H(ctx, symbol)
+	if errHist != nil || len(history) < 5 {
+		history = generateTrendHistory(open, low, high, price)
 	}
 
 	name := LookupAssetName(symbol)
@@ -115,18 +108,16 @@ func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model
 		Volume24h:   volume,
 		MarketCap:   marketCap,
 		Change24h:   change24h,
-		Change7D:    change7d,
 		History:     history,
-		History7D:   history7d,
 		LastUpdated: time.Now(),
 	}
 
 	return pair, nil
 }
 
-// FetchCandles7D retrieves 7-day historical candle close prices from Coinbase API.
-func (f *CoinbaseFetcher) FetchCandles7D(ctx context.Context, symbol string) ([]float64, error) {
-	reqURL := fmt.Sprintf("%s/products/%s/candles?granularity=21600", f.baseURL, symbol)
+// FetchCandles24H retrieves 24-hour hourly candle close prices from Coinbase API.
+func (f *CoinbaseFetcher) FetchCandles24H(ctx context.Context, symbol string) ([]float64, error) {
+	reqURL := fmt.Sprintf("%s/products/%s/candles?granularity=3600", f.baseURL, symbol)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, reqURL, nil)
 	if err != nil {
 		return nil, err
@@ -150,8 +141,8 @@ func (f *CoinbaseFetcher) FetchCandles7D(ctx context.Context, symbol string) ([]
 		return nil, err
 	}
 
-	if len(raw) > 28 {
-		raw = raw[:28]
+	if len(raw) > 24 {
+		raw = raw[:24]
 	}
 
 	prices := make([]float64, len(raw))
@@ -195,29 +186,16 @@ func generateTrendHistory(open, low, high, price float64) []float64 {
 
 	return []float64{
 		open,
-		open + (mid1-open)*0.5,
+		open + (mid1-open)*0.4,
 		low,
-		low + (mid2-low)*0.4,
+		low + (mid2-low)*0.3,
 		mid2,
-		mid2 + (high-mid2)*0.6,
+		mid2 + (high-mid2)*0.5,
 		high,
-		high - (high-mid3)*0.4,
+		high - (high-mid3)*0.3,
 		mid3,
 		price,
 	}
-}
-
-func generate7DTrendHistory(open, low, high, price float64) []float64 {
-	base := open * 0.95
-	if base == 0 {
-		base = price * 0.95
-	}
-	res := make([]float64, 28)
-	for i := 0; i < 28; i++ {
-		ratio := float64(i) / 27.0
-		res[i] = base + (price-base)*ratio
-	}
-	return res
 }
 
 func formatCryptoMarketCap(symbol string, price float64) string {
