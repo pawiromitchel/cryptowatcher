@@ -84,12 +84,36 @@ func TestUIModelRemovePair(t *testing.T) {
 		t.Fatalf("expected 3 initial crypto pairs, got %d", initialCryptoLen)
 	}
 
-	// Remove highlighted crypto pair
+	// 1. Press 'd' to open delete confirmation modal
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
 	m = updated.(Model)
 
+	if m.mode != modeDeleteConfirm {
+		t.Fatalf("expected modeDeleteConfirm after pressing 'd', got %v", m.mode)
+	}
+
+	// 2. Press 'n' to cancel
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'n'}})
+	m = updated.(Model)
+
+	if m.mode != modeNormal {
+		t.Fatalf("expected modeNormal after cancelling, got %v", m.mode)
+	}
+	if len(m.cryptoPairs) != initialCryptoLen {
+		t.Fatalf("expected crypto pairs length to remain %d, got %d", initialCryptoLen, len(m.cryptoPairs))
+	}
+
+	// 3. Press 'd' then 'y' to confirm removal
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'d'}})
+	m = updated.(Model)
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'y'}})
+	m = updated.(Model)
+
+	if m.mode != modeNormal {
+		t.Fatalf("expected modeNormal after confirming removal, got %v", m.mode)
+	}
 	if len(m.cryptoPairs) != initialCryptoLen-1 {
-		t.Errorf("expected %d crypto pairs after deletion, got %d", initialCryptoLen-1, len(m.cryptoPairs))
+		t.Errorf("expected %d crypto pairs after confirmed deletion, got %d", initialCryptoLen-1, len(m.cryptoPairs))
 	}
 }
 

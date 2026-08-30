@@ -19,6 +19,7 @@ type viewMode int
 const (
 	modeNormal viewMode = iota
 	modeAdd
+	modeDeleteConfirm
 )
 
 // Messages
@@ -166,7 +167,7 @@ func (m Model) addPairCmd(rawInput string) tea.Cmd {
 	}
 }
 
-// AllPairs returns combined slice of all monitored pairs for charts and stats.
+// AllPairs returns combined slice of all monitored pairs for stats.
 func (m Model) AllPairs() []model.CryptoPair {
 	res := make([]model.CryptoPair, 0, len(m.cryptoPairs)+len(m.stockPairs))
 	res = append(res, m.cryptoPairs...)
@@ -258,6 +259,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		// Delete Confirmation Modal Handling
+		if m.mode == modeDeleteConfirm {
+			switch msg.String() {
+			case "y", "Y", "enter":
+				if m.sectionIndex == 0 && len(m.cryptoPairs) > 0 {
+					removed := m.cryptoPairs[m.cryptoCursor]
+					m.cryptoPairs = append(m.cryptoPairs[:m.cryptoCursor], m.cryptoPairs[m.cryptoCursor+1:]...)
+					newPairs := make([]string, len(m.cryptoPairs))
+					for i, p := range m.cryptoPairs {
+						newPairs[i] = p.Symbol
+					}
+					m.cfg.CryptoPairs = newPairs
+					_ = config.Save(m.cfg)
+					if m.cryptoCursor >= len(m.cryptoPairs) && m.cryptoCursor > 0 {
+						m.cryptoCursor--
+					}
+					m.statusMsg = fmt.Sprintf("Removed %s", removed.Display)
+				} else if m.sectionIndex == 1 && len(m.stockPairs) > 0 {
+					removed := m.stockPairs[m.stockCursor]
+					m.stockPairs = append(m.stockPairs[:m.stockCursor], m.stockPairs[m.stockCursor+1:]...)
+					newPairs := make([]string, len(m.stockPairs))
+					for i, p := range m.stockPairs {
+						newPairs[i] = p.Symbol
+					}
+					m.cfg.StockPairs = newPairs
+					_ = config.Save(m.cfg)
+					if m.stockCursor >= len(m.stockPairs) && m.stockCursor > 0 {
+						m.stockCursor--
+					}
+					m.statusMsg = fmt.Sprintf("Removed %s", removed.Display)
+				}
+				m.mode = modeNormal
+				return m, nil
+
+			case "n", "N", "esc", "q":
+				m.mode = modeNormal
+				m.statusMsg = "Deletion cancelled"
+				return m, nil
+			}
+			return m, nil
+		}
+
+		// Add Modal Handling
 		if m.mode == modeAdd {
 			switch msg.String() {
 			case "enter":
@@ -353,32 +397,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, textinput.Blink
 
 		case "d", "x", "delete":
-			if m.sectionIndex == 0 && len(m.cryptoPairs) > 0 {
-				removed := m.cryptoPairs[m.cryptoCursor]
-				m.cryptoPairs = append(m.cryptoPairs[:m.cryptoCursor], m.cryptoPairs[m.cryptoCursor+1:]...)
-				newPairs := make([]string, len(m.cryptoPairs))
-				for i, p := range m.cryptoPairs {
-					newPairs[i] = p.Symbol
-				}
-				m.cfg.CryptoPairs = newPairs
-				_ = config.Save(m.cfg)
-				if m.cryptoCursor >= len(m.cryptoPairs) && m.cryptoCursor > 0 {
-					m.cryptoCursor--
-				}
-				m.statusMsg = fmt.Sprintf("Removed %s", removed.Display)
-			} else if m.sectionIndex == 1 && len(m.stockPairs) > 0 {
-				removed := m.stockPairs[m.stockCursor]
-				m.stockPairs = append(m.stockPairs[:m.stockCursor], m.stockPairs[m.stockCursor+1:]...)
-				newPairs := make([]string, len(m.stockPairs))
-				for i, p := range m.stockPairs {
-					newPairs[i] = p.Symbol
-				}
-				m.cfg.StockPairs = newPairs
-				_ = config.Save(m.cfg)
-				if m.stockCursor >= len(m.stockPairs) && m.stockCursor > 0 {
-					m.stockCursor--
-				}
-				m.statusMsg = fmt.Sprintf("Removed %s", removed.Display)
+			active := m.ActivePair()
+			if active != nil {
+				m.mode = modeDeleteConfirm
+			} else {
+				m.statusMsg = "No item selected to remove"
 			}
 
 		case "r":
@@ -396,7 +419,6 @@ func (m Model) calculateCardsPerRow() int {
 	if width <= 0 {
 		width = 110
 	}
-	// Each card is ~32 width including margins
 	cards := width / 32
 	if cards < 1 {
 		cards = 1

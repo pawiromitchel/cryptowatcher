@@ -47,6 +47,22 @@ func (m Model) View() string {
 		b.WriteString("\n")
 	}
 
+	// Modal Overlay for Deleting Pairs Confirmation
+	if m.mode == modeDeleteConfirm {
+		b.WriteString("\n")
+		active := m.ActivePair()
+		targetName := "selected ticker"
+		if active != nil {
+			targetName = fmt.Sprintf("%s (%s)", active.Display, active.Name)
+		}
+		modalContent := fmt.Sprintf(
+			"Remove Ticker Confirmation:\n\nAre you sure you want to remove %s?\n\n[y / Enter] Confirm Removal    [n / Esc] Cancel",
+			widgetSymbolStyle.Render(targetName),
+		)
+		b.WriteString(modalStyle.Render(modalContent))
+		b.WriteString("\n")
+	}
+
 	// Status Bar & Controls Footer
 	b.WriteString(m.renderFooter())
 
