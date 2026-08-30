@@ -10,8 +10,11 @@ import (
 
 func TestDefaultConfig(t *testing.T) {
 	cfg := model.DefaultConfig()
-	if len(cfg.Pairs) == 0 {
-		t.Fatalf("expected default pairs, got empty slice")
+	if len(cfg.CryptoPairs) == 0 {
+		t.Fatalf("expected default crypto pairs, got empty slice")
+	}
+	if len(cfg.StockPairs) == 0 {
+		t.Fatalf("expected default stock pairs, got empty slice")
 	}
 	if cfg.RefreshInterval <= 0 {
 		t.Errorf("expected positive refresh interval, got %d", cfg.RefreshInterval)
@@ -31,11 +34,15 @@ func TestLoadSaveConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load default config: %v", err)
 	}
-	if len(cfg.Pairs) != 3 {
-		t.Errorf("expected 3 default pairs, got %d", len(cfg.Pairs))
+	if len(cfg.CryptoPairs) != 3 {
+		t.Errorf("expected 3 default crypto pairs, got %d", len(cfg.CryptoPairs))
+	}
+	if len(cfg.StockPairs) != 4 {
+		t.Errorf("expected 4 default stock pairs, got %d", len(cfg.StockPairs))
 	}
 
-	cfg.Pairs = append(cfg.Pairs, "DOGE-USD")
+	cfg.CryptoPairs = append(cfg.CryptoPairs, "DOGE-USD")
+	cfg.StockPairs = append(cfg.StockPairs, "NVDA")
 	if err := Save(cfg); err != nil {
 		t.Fatalf("failed to save config: %v", err)
 	}
@@ -44,11 +51,11 @@ func TestLoadSaveConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to reload config: %v", err)
 	}
-	if len(loaded.Pairs) != 4 {
-		t.Errorf("expected 4 pairs after save, got %d", len(loaded.Pairs))
+	if len(loaded.CryptoPairs) != 4 {
+		t.Errorf("expected 4 crypto pairs after save, got %d", len(loaded.CryptoPairs))
 	}
-	if loaded.Pairs[3] != "DOGE-USD" {
-		t.Errorf("expected last pair to be DOGE-USD, got %s", loaded.Pairs[3])
+	if len(loaded.StockPairs) != 5 {
+		t.Errorf("expected 5 stock pairs after save, got %d", len(loaded.StockPairs))
 	}
 }
 

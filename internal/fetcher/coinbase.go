@@ -100,14 +100,20 @@ func (f *CoinbaseFetcher) FetchPair(ctx context.Context, rawInput string) (model
 		change7d = ((price - history7d[0]) / history7d[0]) * 100.0
 	}
 
+	name := LookupAssetName(symbol)
+	marketCap := formatCryptoMarketCap(symbol, price)
+
 	pair := model.CryptoPair{
 		Symbol:      symbol,
 		Display:     display,
+		Name:        name,
+		Type:        model.AssetCrypto,
 		Price:       price,
 		Open24h:     open,
 		High24h:     high,
 		Low24h:      low,
 		Volume24h:   volume,
+		MarketCap:   marketCap,
 		Change24h:   change24h,
 		Change7D:    change7d,
 		History:     history,
@@ -212,4 +218,24 @@ func generate7DTrendHistory(open, low, high, price float64) []float64 {
 		res[i] = base + (price-base)*ratio
 	}
 	return res
+}
+
+func formatCryptoMarketCap(symbol string, price float64) string {
+	base := extractBaseTicker(symbol)
+	switch base {
+	case "BTC":
+		return fmt.Sprintf("$%.2fT", (price*19800000)/1e12)
+	case "ETH":
+		return fmt.Sprintf("$%.1fB", (price*120400000)/1e9)
+	case "SOL":
+		return fmt.Sprintf("$%.1fB", (price*470000000)/1e9)
+	case "DOGE":
+		return fmt.Sprintf("$%.1fB", (price*147000000000)/1e9)
+	case "ADA":
+		return fmt.Sprintf("$%.1fB", (price*35000000000)/1e9)
+	case "AVAX":
+		return fmt.Sprintf("$%.1fB", (price*400000000)/1e9)
+	default:
+		return "$--B"
+	}
 }

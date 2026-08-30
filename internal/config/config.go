@@ -53,9 +53,18 @@ func Load() (*model.Config, error) {
 		return model.DefaultConfig(), nil
 	}
 
-	if len(cfg.Pairs) == 0 {
-		cfg.Pairs = model.DefaultConfig().Pairs
+	// Handle legacy config migration
+	if len(cfg.CryptoPairs) == 0 {
+		if len(cfg.Pairs) > 0 {
+			cfg.CryptoPairs = cfg.Pairs
+		} else {
+			cfg.CryptoPairs = model.DefaultConfig().CryptoPairs
+		}
 	}
+	if len(cfg.StockPairs) == 0 {
+		cfg.StockPairs = model.DefaultConfig().StockPairs
+	}
+
 	if cfg.RefreshInterval <= 0 {
 		cfg.RefreshInterval = 5
 	}
