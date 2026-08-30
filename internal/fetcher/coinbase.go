@@ -14,7 +14,7 @@ import (
 
 const (
 	defaultCoinbaseBaseURL = "https://api.exchange.coinbase.com"
-	defaultTimeout        = 5 * time.Second
+	defaultTimeout         = 5 * time.Second
 )
 
 // CoinbaseStatsResponse represents the payload returned by Coinbase Exchange API /products/{id}/stats

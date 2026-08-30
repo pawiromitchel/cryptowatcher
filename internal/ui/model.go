@@ -36,22 +36,22 @@ type addedPairMsg struct {
 
 // Model represents the Bubble Tea application state for the Widget Dashboard.
 type Model struct {
-	cfg            *model.Config
-	fetcher        fetcher.PriceFetcher
-	cryptoPairs    []model.CryptoPair
-	stockPairs     []model.CryptoPair
-	sectionIndex   int // 0 = Crypto, 1 = Stocks
-	cryptoCursor   int
-	stockCursor    int
-	mode           viewMode
-	textInput      textinput.Model
-	keys           KeyMap
-	statusMsg      string
-	err            error
-	loading        bool
-	lastRefresh    time.Time
-	width          int
-	height         int
+	cfg          *model.Config
+	fetcher      fetcher.PriceFetcher
+	cryptoPairs  []model.CryptoPair
+	stockPairs   []model.CryptoPair
+	sectionIndex int // 0 = Crypto, 1 = Stocks
+	cryptoCursor int
+	stockCursor  int
+	mode         viewMode
+	textInput    textinput.Model
+	keys         KeyMap
+	statusMsg    string
+	err          error
+	loading      bool
+	lastRefresh  time.Time
+	width        int
+	height       int
 }
 
 // NewModel initializes the UI model with crypto and stock watchlists.
