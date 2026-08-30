@@ -30,7 +30,24 @@ A real-time Terminal User Interface (TUI) stocks and cryptocurrency dashboard in
 
 ## Installation
 
-### Pre-built Binaries (Recommended)
+### Via Homebrew (macOS & Linux)
+
+Install directly with one command:
+
+```bash
+brew install pawiromitchel/tap/cryptowatcher
+```
+
+Or tap first:
+
+```bash
+brew tap pawiromitchel/tap
+brew install cryptowatcher
+```
+
+---
+
+### Pre-built Binaries
 
 Download the pre-compiled binary for your operating system from the [Latest GitHub Release](https://github.com/pawiromitchel/cryptowatcher/releases/latest):
 
