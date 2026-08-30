@@ -116,3 +116,8 @@ func NormalizeSymbol(input string) (symbol string, display string) {
 
 	return symbol, display
 }
+
+func extractBaseTicker(symbol string) string {
+	parts := strings.Split(symbol, "-")
+	return strings.ToUpper(parts[0])
+}

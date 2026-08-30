@@ -41,7 +41,10 @@ func main() {
 	if *useMock {
 		priceFetcher = fetcher.NewMockFetcher()
 	} else {
-		priceFetcher = fetcher.NewCoinbaseFetcher()
+		priceFetcher = fetcher.NewMultiFetcher(
+			fetcher.NewCoinbaseFetcher(),
+			fetcher.NewPythFetcher(),
+		)
 	}
 
 	p := tea.NewProgram(

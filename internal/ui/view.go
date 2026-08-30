@@ -36,14 +36,6 @@ func (m Model) View() string {
 	b.WriteString(m.renderWidgetGrid(m.stockPairs, m.sectionIndex == 1, m.stockCursor, cardWidth))
 	b.WriteString("\n")
 
-	// 3. 7-Day Multi-Asset Correlation Line Chart Box
-	chartContent := m.renderChartSection()
-	if chartContent != "" {
-		chartBox := chartBoxStyle.Render(chartContent)
-		b.WriteString(chartBox)
-		b.WriteString("\n")
-	}
-
 	// Modal Overlay for Adding Pairs
 	if m.mode == modeAdd {
 		b.WriteString("\n")
@@ -111,7 +103,7 @@ func (m Model) renderSummaryCards() string {
 	worstStr := fmt.Sprintf("%s (%s)", worstPair.Display, formatChange(worstPair.Change24h))
 	c3 := summaryCardStyle.Render(fmt.Sprintf("TOP LOSER\n%s", worstStr))
 
-	statusText := "🟢 LIVE (Multi-Feed: Coinbase & Pyth)"
+	statusText := "🟢 LIVE (Multi-Feed: Coinbase & Yahoo)"
 	if m.loading {
 		statusText = "🟡 UPDATING..."
 	} else if m.err != nil {
@@ -120,31 +112,6 @@ func (m Model) renderSummaryCards() string {
 	c4 := summaryCardStyle.Render(fmt.Sprintf("STATUS\n%s", summaryValueStyle.Render(statusText)))
 
 	return lipgloss.JoinHorizontal(lipgloss.Top, c1, c2, c3, c4)
-}
-
-func (m Model) renderChartSection() string {
-	all := m.AllPairs()
-	if len(all) == 0 {
-		return ""
-	}
-
-	var sb strings.Builder
-	sb.WriteString(subHeaderStyle.Render("📊 7-DAY RELATIVE PERFORMANCE & CORRELATION CHART (NORMALIZED %)"))
-	sb.WriteString("\n\n")
-
-	totalWidth := m.width
-	if totalWidth <= 0 {
-		totalWidth = 110
-	}
-	chartWidth := totalWidth - 6
-	if chartWidth < 60 {
-		chartWidth = 60
-	}
-
-	chartStr := RenderMultiLineChart(all, chartWidth)
-	sb.WriteString(chartStr)
-
-	return sb.String()
 }
 
 func (m Model) renderFooter() string {

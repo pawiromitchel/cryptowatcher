@@ -36,7 +36,7 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) str
 	line1 := symStr + strings.Repeat(" ", space1) + capStr
 
 	// 2. Subhead: Asset Name + 24h Change %
-	nameStr := widgetNameStyle.Render(truncateString(item.Name, 14))
+	nameStr := widgetNameStyle.Render(truncateString(item.Name, 13))
 	changeStr := formatChange(item.Change24h)
 	space2 := innerWidth - lipgloss.Width(nameStr) - lipgloss.Width(changeStr)
 	if space2 < 1 {
@@ -44,7 +44,7 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) str
 	}
 	line2 := nameStr + strings.Repeat(" ", space2) + changeStr
 
-	// 3. Mini Inline Chart with Dotted Baseline
+	// 3. Mini Inline Braille Chart with Dotted Baseline
 	chartWidth := innerWidth - 2
 	miniChart := renderWidgetMiniChart(item.History, isBullish, chartWidth)
 	baseLine := lipgloss.NewStyle().Foreground(grayColor).Render(strings.Repeat("┄", chartWidth))
@@ -75,12 +75,15 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) str
 }
 
 func renderWidgetMiniChart(history []float64, isBullish bool, width int) string {
-	if len(history) == 0 {
-		return strings.Repeat("─", width)
+	if len(history) < 2 {
+		if isBullish {
+			return positiveStyle.Render(strings.Repeat("⠒", width))
+		}
+		return negativeStyle.Render(strings.Repeat("⠒", width))
 	}
 
 	subWidth := width * 2
-	subHeight := 4 // 1 character row of Braille has 4 sub-pixels
+	subHeight := 4 // 1 character row has 4 sub-pixel dots vertically
 
 	minVal := history[0]
 	maxVal := history[0]
@@ -93,9 +96,9 @@ func renderWidgetMiniChart(history []float64, isBullish bool, width int) string 
 		}
 	}
 
-	if maxVal == minVal {
-		maxVal += 1.0
-		minVal -= 1.0
+	diff := maxVal - minVal
+	if diff == 0 {
+		diff = 1.0
 	}
 
 	subGrid := make([][]uint8, 1)
@@ -105,7 +108,7 @@ func renderWidgetMiniChart(history []float64, isBullish bool, width int) string 
 	pts := make([][2]int, numPts)
 	for j, val := range history {
 		x := int(math.Round((float64(j) / float64(numPts-1)) * float64(subWidth-1)))
-		norm := (val - minVal) / (maxVal - minVal)
+		norm := (val - minVal) / diff
 		y := (subHeight - 1) - int(math.Round(norm*float64(subHeight-1)))
 		if y < 0 {
 			y = 0
@@ -117,7 +120,7 @@ func renderWidgetMiniChart(history []float64, isBullish bool, width int) string 
 	}
 
 	for j := 0; j < numPts-1; j++ {
-		drawSubLine(subGrid, pts[j][0], pts[j][1], pts[j+1][0], pts[j+1][1])
+		drawWidgetSubLine(subGrid, pts[j][0], pts[j][1], pts[j+1][0], pts[j+1][1])
 	}
 
 	var sb strings.Builder
@@ -127,7 +130,7 @@ func renderWidgetMiniChart(history []float64, isBullish bool, width int) string 
 			rRune := rune(0x2800 + uint16(bitmask))
 			sb.WriteRune(rRune)
 		} else {
-			sb.WriteString(" ")
+			sb.WriteRune('⠒')
 		}
 	}
 
@@ -138,9 +141,88 @@ func renderWidgetMiniChart(history []float64, isBullish bool, width int) string 
 	return negativeStyle.Render(chartStr)
 }
 
+func drawWidgetSubLine(subGrid [][]uint8, x0, y0, x1, y1 int) {
+	dx := absInt(x1 - x0)
+	dy := absInt(y1 - y0)
+	sx := -1
+	if x0 < x1 {
+		sx = 1
+	}
+	sy := -1
+	if y0 < y1 {
+		sy = 1
+	}
+	err := dx - dy
+
+	for {
+		setWidgetSubPixel(subGrid, x0, y0)
+		if x0 == x1 && y0 == y1 {
+			break
+		}
+		e2 := 2 * err
+		if e2 > -dy {
+			err -= dy
+			x0 += sx
+		}
+		if e2 < dx {
+			err += dx
+			y0 += sy
+		}
+	}
+}
+
+func setWidgetSubPixel(subGrid [][]uint8, x, y int) {
+	if y < 0 || x < 0 {
+		return
+	}
+	cellRow := y / 4
+	cellCol := x / 2
+
+	if cellRow < 0 || cellRow >= len(subGrid) || cellCol < 0 || cellCol >= len(subGrid[0]) {
+		return
+	}
+
+	subX := x % 2
+	subY := y % 4
+
+	var bit uint8
+	if subX == 0 {
+		switch subY {
+		case 0:
+			bit = 0x01
+		case 1:
+			bit = 0x02
+		case 2:
+			bit = 0x04
+		case 3:
+			bit = 0x40
+		}
+	} else {
+		switch subY {
+		case 0:
+			bit = 0x08
+		case 1:
+			bit = 0x10
+		case 2:
+			bit = 0x20
+		case 3:
+			bit = 0x80
+		}
+	}
+
+	subGrid[cellRow][cellCol] |= bit
+}
+
 func truncateString(s string, maxLen int) string {
 	if len(s) <= maxLen {
 		return s
 	}
 	return s[:maxLen-1] + "…"
+}
+
+func absInt(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }

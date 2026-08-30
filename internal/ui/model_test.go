@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -157,25 +156,6 @@ func TestFormatVolume(t *testing.T) {
 		if got != tt.want {
 			t.Errorf("formatVolume(%f) = %q; want %q", tt.input, got, tt.want)
 		}
-	}
-}
-
-func TestRenderMultiLineChart(t *testing.T) {
-	cfg := model.DefaultConfig()
-	mockFetcher := fetcher.NewMockFetcher()
-	allSymbols := append(cfg.CryptoPairs, cfg.StockPairs...)
-	pairs, err := mockFetcher.FetchPrices(context.Background(), allSymbols)
-	if err != nil {
-		t.Fatalf("failed to fetch mock prices: %v", err)
-	}
-
-	chartStr := RenderMultiLineChart(pairs, 80)
-	if chartStr == "" {
-		t.Fatalf("expected non-empty correlation chart string")
-	}
-
-	if !containsSubstring(chartStr, "Legend:") {
-		t.Errorf("expected legend in chart output, got: %s", chartStr)
 	}
 }
 
