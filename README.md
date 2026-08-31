@@ -81,16 +81,26 @@ make build
 
 ## Keybindings
 
+### Dashboard View
+
 | Key | Action |
 | --- | --- |
-| `←` / `h` | Move selection left |
-| `→` / `l` | Move selection right |
-| `↑` / `k` | Move selection up (within row or across category sections) |
-| `↓` / `j` | Move selection down (within row or across category sections) |
-| `a` / `+` | Add new crypto pair or stock ticker (modal input) |
-| `d` / `x` | Delete selected widget card |
+| `Enter` / `Space` | Open Full-Screen Deep-Dive Inspector for highlighted ticker |
+| `←` / `→` / `h` / `l` | Move selection horizontally across grid cards |
+| `↑` / `↓` / `k` / `j` | Move selection vertically across rows and category sections |
+| `a` / `+` | Add new crypto pair or stock ticker (interactive modal) |
+| `d` / `x` | Remove selected widget card (with confirmation prompt) |
 | `r` | Force instant refresh across all tickers |
 | `q` / `Ctrl+C` | Quit application |
+
+### Full-Screen Inspector View
+
+| Key | Action |
+| --- | --- |
+| `←` / `→` / `Tab` | Switch Timeframe Tab (`1D`, `1W`, `1M`, `1Y`, `ALL`) |
+| `↑` / `↓` / `k` / `j` | Cycle directly to previous / next asset without leaving inspector |
+| `r` | Force instant price refresh |
+| `Esc` / `Enter` / `q` | Return to Dashboard |
 
 ---
 

@@ -10,8 +10,16 @@ import (
 	"cryptowatcher/internal/model"
 )
 
-// View renders the terminal user interface string for the macOS-style Widget Dashboard.
+// View renders the terminal user interface string for the macOS-style Widget Dashboard or Full-Screen Inspector.
 func (m Model) View() string {
+	// Full-Screen Inspector View
+	if m.mode == modeInspector {
+		active := m.ActivePair()
+		if active != nil {
+			return RenderInspectorView(*active, m.inspectorTimeframe, m.width)
+		}
+	}
+
 	var b strings.Builder
 
 	// Header Banner
@@ -144,7 +152,7 @@ func (m Model) renderFooter() string {
 	}
 
 	controls := fmt.Sprintf(
-		"[a] Add Ticker | [d] Remove | [r] Refresh | [←/→/↑/↓] Navigate Grid | [q] Quit  (Last Updated: %s)",
+		"[Enter/Space] Inspector | [a] Add | [d] Remove | [r] Refresh | [←/→/↑/↓] Grid | [q] Quit  (Synced: %s)",
 		lastUpdatedStr,
 	)
 	sb.WriteString(statusBarStyle.Render(controls))
@@ -177,15 +185,15 @@ func formatChange(change float64) string {
 
 func formatVolume(vol float64) string {
 	if vol >= 1_000_000_000 {
-		return fmt.Sprintf("%.2fB", vol/1_000_000_000)
+		return fmt.Sprintf("$%.2fB", vol/1_000_000_000)
 	}
 	if vol >= 1_000_000 {
-		return fmt.Sprintf("%.2fM", vol/1_000_000)
+		return fmt.Sprintf("$%.2fM", vol/1_000_000)
 	}
 	if vol >= 1_000 {
-		return fmt.Sprintf("%.2fK", vol/1_000)
+		return fmt.Sprintf("$%.2fK", vol/1_000)
 	}
-	return fmt.Sprintf("%.2f", vol)
+	return fmt.Sprintf("$%.2f", vol)
 }
 
 // Ensure time import is referenced properly

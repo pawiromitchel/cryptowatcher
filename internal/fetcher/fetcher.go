@@ -125,3 +125,22 @@ func extractBaseTicker(symbol string) string {
 	parts := strings.Split(symbol, "-")
 	return strings.ToUpper(parts[0])
 }
+
+// GenerateTrendHistory synthesizes a smooth intra-period curve from OHLC metrics.
+func GenerateTrendHistory(open, low, high, price float64) []float64 {
+	mid1 := (open + low) / 2.0
+	mid2 := (low + high) / 2.0
+	mid3 := (high + price) / 2.0
+	return []float64{
+		open,
+		mid1,
+		low,
+		low + (mid2-low)*0.3,
+		mid2,
+		mid2 + (high-mid2)*0.5,
+		high,
+		high - (high-mid3)*0.3,
+		mid3,
+		price,
+	}
+}

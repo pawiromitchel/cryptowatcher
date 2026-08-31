@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
@@ -167,12 +169,12 @@ func TestFormatVolume(t *testing.T) {
 		input float64
 		want  string
 	}{
-		{500.50, "500.50"},
-		{10687.52, "10.69K"},
-		{106915.89, "106.92K"},
-		{1880137.64, "1.88M"},
-		{261156235.80, "261.16M"},
-		{1500000000.00, "1.50B"},
+		{500.50, "$500.50"},
+		{10687.52, "$10.69K"},
+		{106915.89, "$106.92K"},
+		{1880137.64, "$1.88M"},
+		{261156235.80, "$261.16M"},
+		{1500000000.00, "$1.50B"},
 	}
 
 	for _, tt := range tests {
@@ -183,15 +185,90 @@ func TestFormatVolume(t *testing.T) {
 	}
 }
 
-func containsSubstring(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || (len(s) > len(sub) && stringSearch(s, sub)))
+func TestUIModelInspectorMode(t *testing.T) {
+	cfg := model.DefaultConfig()
+	mockFetcher := fetcher.NewMockFetcher()
+	m := NewModel(cfg, mockFetcher)
+
+	// 1. Press Enter to open inspector mode
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	m = updated.(Model)
+
+	if m.mode != modeInspector {
+		t.Fatalf("expected modeInspector after pressing Enter, got %v", m.mode)
+	}
+
+	// 2. Press Right to switch timeframe
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRight})
+	m = updated.(Model)
+	if m.inspectorTimeframe != 1 {
+		t.Errorf("expected inspector timeframe 1 (1W), got %d", m.inspectorTimeframe)
+	}
+
+	// 3. Press Left to switch timeframe back
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
+	m = updated.(Model)
+	if m.inspectorTimeframe != 0 {
+		t.Errorf("expected inspector timeframe 0 (1D), got %d", m.inspectorTimeframe)
+	}
+
+	// 4. Press Esc to return to normal dashboard mode
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	m = updated.(Model)
+	if m.mode != modeNormal {
+		t.Fatalf("expected modeNormal after pressing Esc, got %v", m.mode)
+	}
 }
 
-func stringSearch(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
+func TestRenderInspectorView(t *testing.T) {
+	pair := model.CryptoPair{
+		Symbol:      "BTC-USD",
+		Display:     "BTC/USD",
+		Name:        "Bitcoin USD",
+		Price:       78500.00,
+		Open24h:     77000.00,
+		High24h:     79000.00,
+		Low24h:      76500.00,
+		Volume24h:   1500000000.00,
+		MarketCap:   "$1.57T",
+		Change24h:   1.95,
+		History:     []float64{77000, 77500, 78000, 78500},
+		LastUpdated: time.Now(),
+	}
+
+	view := RenderInspectorView(pair, 0, 100)
+	if view == "" {
+		t.Fatalf("rendered inspector view is empty")
+	}
+
+	expectedSubstrings := []string{
+		"BTC/USD",
+		"Bitcoin USD",
+		"Market Cap: $1.57T",
+		"PRICE ACTION & VOLATILITY",
+		"VALUATION & LIQUIDITY",
+		"24h Open:",
+		"24h High:",
+		"24h Low:",
+	}
+
+	for _, str := range expectedSubstrings {
+		if !containsSubstring(view, str) {
+			t.Errorf("inspector view missing expected substring %q", str)
 		}
 	}
-	return false
+}
+
+func TestRenderRangeBar(t *testing.T) {
+	bar := RenderRangeBar(78000, 76000, 80000, 20)
+	if bar == "" {
+		t.Fatalf("range bar is empty")
+	}
+	if !strings.HasPrefix(bar, "[") || !strings.HasSuffix(bar, "]") {
+		t.Errorf("expected range bar to start with [ and end with ], got %s", bar)
+	}
+}
+
+func containsSubstring(s, sub string) bool {
+	return strings.Contains(s, sub)
 }

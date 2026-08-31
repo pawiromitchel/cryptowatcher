@@ -20,6 +20,7 @@ const (
 	modeNormal viewMode = iota
 	modeAdd
 	modeDeleteConfirm
+	modeInspector
 )
 
 // Messages
@@ -37,22 +38,23 @@ type addedPairMsg struct {
 
 // Model represents the Bubble Tea application state for the Widget Dashboard.
 type Model struct {
-	cfg          *model.Config
-	fetcher      fetcher.PriceFetcher
-	cryptoPairs  []model.CryptoPair
-	stockPairs   []model.CryptoPair
-	sectionIndex int // 0 = Crypto, 1 = Stocks
-	cryptoCursor int
-	stockCursor  int
-	mode         viewMode
-	textInput    textinput.Model
-	keys         KeyMap
-	statusMsg    string
-	err          error
-	loading      bool
-	lastRefresh  time.Time
-	width        int
-	height       int
+	cfg                *model.Config
+	fetcher            fetcher.PriceFetcher
+	cryptoPairs        []model.CryptoPair
+	stockPairs         []model.CryptoPair
+	sectionIndex       int // 0 = Crypto, 1 = Stocks
+	cryptoCursor       int
+	stockCursor        int
+	mode               viewMode
+	inspectorTimeframe int // 0 = 1D, 1 = 1W, 2 = 1M, 3 = 1Y, 4 = ALL
+	textInput          textinput.Model
+	keys               KeyMap
+	statusMsg          string
+	err                error
+	loading            bool
+	lastRefresh        time.Time
+	width              int
+	height             int
 }
 
 // NewModel initializes the UI model with crypto and stock watchlists.
@@ -85,17 +87,18 @@ func NewModel(cfg *model.Config, pf fetcher.PriceFetcher) Model {
 	}
 
 	return Model{
-		cfg:          cfg,
-		fetcher:      pf,
-		cryptoPairs:  initialCrypto,
-		stockPairs:   initialStocks,
-		sectionIndex: 0,
-		cryptoCursor: 0,
-		stockCursor:  0,
-		mode:         modeNormal,
-		textInput:    ti,
-		keys:         DefaultKeyMap(),
-		loading:      true,
+		cfg:                cfg,
+		fetcher:            pf,
+		cryptoPairs:        initialCrypto,
+		stockPairs:         initialStocks,
+		sectionIndex:       0,
+		cryptoCursor:       0,
+		stockCursor:        0,
+		mode:               modeNormal,
+		inspectorTimeframe: 0,
+		textInput:          ti,
+		keys:               DefaultKeyMap(),
+		loading:            true,
 	}
 }
 
@@ -259,6 +262,82 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		// Full-Screen Deep Dive Inspector Handling
+		if m.mode == modeInspector {
+			switch msg.String() {
+			case "esc", "q", "backspace":
+				m.mode = modeNormal
+				return m, nil
+
+			case "enter", "space":
+				m.mode = modeNormal
+				return m, nil
+
+			case "left", "h":
+				if m.inspectorTimeframe > 0 {
+					m.inspectorTimeframe--
+				}
+				return m, nil
+
+			case "right", "l", "tab":
+				if m.inspectorTimeframe < len(timeframeLabels)-1 {
+					m.inspectorTimeframe++
+				}
+				return m, nil
+
+			case "shift+tab":
+				if m.inspectorTimeframe > 0 {
+					m.inspectorTimeframe--
+				}
+				return m, nil
+
+			case "up", "k":
+				// Cycle to previous asset
+				if m.sectionIndex == 0 {
+					if m.cryptoCursor > 0 {
+						m.cryptoCursor--
+					} else if len(m.stockPairs) > 0 {
+						m.sectionIndex = 1
+						m.stockCursor = len(m.stockPairs) - 1
+					}
+				} else {
+					if m.stockCursor > 0 {
+						m.stockCursor--
+					} else if len(m.cryptoPairs) > 0 {
+						m.sectionIndex = 0
+						m.cryptoCursor = len(m.cryptoPairs) - 1
+					}
+				}
+				return m, nil
+
+			case "down", "j":
+				// Cycle to next asset
+				if m.sectionIndex == 0 {
+					if m.cryptoCursor < len(m.cryptoPairs)-1 {
+						m.cryptoCursor++
+					} else if len(m.stockPairs) > 0 {
+						m.sectionIndex = 1
+						m.stockCursor = 0
+					}
+				} else {
+					if m.stockCursor < len(m.stockPairs)-1 {
+						m.stockCursor++
+					} else if len(m.cryptoPairs) > 0 {
+						m.sectionIndex = 0
+						m.cryptoCursor = 0
+					}
+				}
+				return m, nil
+
+			case "r":
+				m.loading = true
+				m.statusMsg = "Refreshing prices..."
+				cmds = append(cmds, m.fetchPricesCmd())
+				return m, tea.Batch(cmds...)
+			}
+			return m, nil
+		}
+
 		// Delete Confirmation Modal Handling
 		if m.mode == modeDeleteConfirm {
 			switch msg.String() {
@@ -332,6 +411,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch msg.String() {
 		case "q", "ctrl+c":
 			return m, tea.Quit
+
+		case "enter", "space":
+			active := m.ActivePair()
+			if active != nil {
+				m.mode = modeInspector
+				m.inspectorTimeframe = 0
+				return m, nil
+			}
 
 		case "left", "h":
 			if m.sectionIndex == 0 {

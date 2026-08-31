@@ -122,4 +122,26 @@ var (
 	errorStyle = lipgloss.NewStyle().
 			Foreground(redColor).
 			Bold(true)
+
+	// Full-Screen Inspector Styles
+	inspectorBoxStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(primaryColor).
+				Padding(1, 2)
+
+	tabActiveStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("0")).
+			Background(cyanColor).
+			Padding(0, 1)
+
+	tabInactiveStyle = lipgloss.NewStyle().
+				Foreground(lightGrayColor).
+				Background(bgCardColor).
+				Padding(0, 1)
+
+	statBoxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(grayColor).
+			Padding(1, 2)
 )
