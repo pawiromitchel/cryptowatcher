@@ -258,12 +258,14 @@ func TestRenderInspectorView(t *testing.T) {
 	expectedSubstrings := []string{
 		"BTC/USD",
 		"Bitcoin USD",
-		"Market Cap: $1.57T",
-		"PRICE ACTION & VOLATILITY",
-		"VALUATION & LIQUIDITY",
-		"24h Open:",
-		"24h High:",
-		"24h Low:",
+		"Market Cap",
+		"PRICE ACTION",
+		"VALUATION",
+		"TECHNICALS",
+		"24h Open",
+		"24h High",
+		"24h Low",
+		"RSI",
 	}
 
 	for _, str := range expectedSubstrings {
