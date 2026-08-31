@@ -73,7 +73,7 @@ func RenderInspectorView(item model.CryptoPair, activeTimeframe int, chartType i
 	sb.WriteString("\n\n")
 
 	// 3. Large High-Definition Chart Canvas (Candlestick or Braille Line)
-	chartHeight := 9
+	chartHeight := 10
 	var chartContent string
 	if chartType == 0 {
 		chartContent = renderCandlestickChart(item, activeTimeframe, innerWidth, chartHeight)
@@ -124,9 +124,9 @@ func renderTimeframeTabsWithMode(activeIdx int, chartType int, innerWidth int) s
 
 	var modeStr string
 	if chartType == 0 {
-		modeStr = selectedWidgetCardStyle.Render(" 🕯️ [c] Candlesticks ")
+		modeStr = tabActiveStyle.Render(" 🕯️ [c] Candlesticks ")
 	} else {
-		modeStr = selectedWidgetCardStyle.Render(" 📈 [c] Line Chart ")
+		modeStr = tabActiveStyle.Render(" 📈 [c] Line Chart ")
 	}
 
 	leftWidth := lipgloss.Width(tabsBar)
@@ -153,14 +153,14 @@ func renderCandlestickChart(item model.CryptoPair, tfIdx int, width int, chartRo
 		plotCols = 30
 	}
 
-	// Determine number of candles (each candle occupies 2 terminal columns: 1 candle char + 1 space)
+	// Each candle occupies 2 terminal characters: 1 candle character + 1 space
 	candleWidth := 2
 	numCandles := plotCols / candleWidth
-	if numCandles < 10 {
-		numCandles = 10
+	if numCandles < 20 {
+		numCandles = 20
 	}
 
-	candles := buildCandlesFromHistory(chartHistory, item.Open24h, item.Low24h, item.High24h, item.Price, numCandles)
+	candles := generateDetailedCandles(chartHistory, item.Open24h, item.Low24h, item.High24h, item.Price, numCandles)
 
 	minVal := candles[0].low
 	maxVal := candles[0].high
@@ -182,7 +182,6 @@ func renderCandlestickChart(item model.CryptoPair, tfIdx int, width int, chartRo
 
 	// Render each row from top (highest price) to bottom (lowest price)
 	for r := 0; r < chartRows; r++ {
-		// Price level for this row
 		rowTopVal := maxVal - (float64(r)/float64(chartRows))*diff
 		rowBotVal := maxVal - (float64(r+1)/float64(chartRows))*diff
 
@@ -203,11 +202,19 @@ func renderCandlestickChart(item model.CryptoPair, tfIdx int, width int, chartRo
 			bodyBot := math.Min(c.open, c.close)
 
 			var char string
-			// Check if row overlaps body
 			if bodyTop >= rowBotVal && bodyBot <= rowTopVal {
-				char = "█"
+				// Body intersects row
+				if bodyTop >= rowTopVal && bodyBot <= rowBotVal {
+					char = "█" // Full body in row
+				} else if bodyTop < rowTopVal && bodyBot <= rowBotVal {
+					char = "▄" // Bottom half body
+				} else if bodyTop >= rowTopVal && bodyBot > rowBotVal {
+					char = "▀" // Top half body
+				} else {
+					char = "█"
+				}
 			} else if c.high >= rowBotVal && c.low <= rowTopVal {
-				// Row is in wick range
+				// Wick intersects row
 				char = "│"
 			} else {
 				char = " "
@@ -234,48 +241,35 @@ func renderCandlestickChart(item model.CryptoPair, tfIdx int, width int, chartRo
 	return sb.String()
 }
 
-func buildCandlesFromHistory(history []float64, open, low, high, close float64, targetCandles int) []ohlcCandle {
-	ptsLen := len(history)
-	if ptsLen == 0 {
-		return []ohlcCandle{{open: open, high: high, low: low, close: close}}
+func generateDetailedCandles(rawPoints []float64, open24h, low24h, high24h, closePrice float64, numCandles int) []ohlcCandle {
+	if len(rawPoints) == 0 {
+		rawPoints = []float64{open24h, closePrice}
 	}
 
-	candles := make([]ohlcCandle, targetCandles)
-	ptsPerCandle := float64(ptsLen) / float64(targetCandles)
+	candles := make([]ohlcCandle, numCandles)
+	spread24h := math.Max(high24h-low24h, closePrice*0.01)
 
-	for i := 0; i < targetCandles; i++ {
-		startIdx := int(math.Floor(float64(i) * ptsPerCandle))
-		endIdx := int(math.Ceil(float64(i+1) * ptsPerCandle))
-		if endIdx > ptsLen {
-			endIdx = ptsLen
-		}
-		if startIdx >= ptsLen {
-			startIdx = ptsLen - 1
-		}
-		if startIdx >= endIdx {
-			endIdx = startIdx + 1
-		}
+	// Continuous spline evaluation across raw points
+	for i := 0; i < numCandles; i++ {
+		t0 := float64(i) / float64(numCandles)
+		t1 := float64(i+1) / float64(numCandles)
 
-		cOpen := history[startIdx]
-		cClose := history[endIdx-1]
-		cHigh := cOpen
-		cLow := cOpen
+		cOpen := evalSpline(rawPoints, t0)
+		cClose := evalSpline(rawPoints, t1)
 
-		for j := startIdx; j < endIdx; j++ {
-			if history[j] > cHigh {
-				cHigh = history[j]
-			}
-			if history[j] < cLow {
-				cLow = history[j]
-			}
+		// Intra-candle micro volatility based on position and sine harmonics
+		candlePhase := float64(i) * 0.8
+		microNoise1 := math.Sin(candlePhase*2.7) * (spread24h * 0.08)
+		microNoise2 := math.Cos(candlePhase*3.9) * (spread24h * 0.06)
+
+		cHigh := math.Max(cOpen, cClose) + math.Abs(microNoise1) + (spread24h * 0.015)
+		cLow := math.Min(cOpen, cClose) - math.Abs(microNoise2) - (spread24h * 0.015)
+
+		if i == 0 {
+			cOpen = rawPoints[0]
 		}
-
-		// Inject micro-volatility wick padding to make candles realistic and readable
-		candleSpread := (cHigh - cLow)
-		if candleSpread < (cHigh * 0.002) {
-			spreadDelta := cHigh * 0.003
-			cHigh += spreadDelta
-			cLow -= spreadDelta
+		if i == numCandles-1 {
+			cClose = closePrice
 		}
 
 		candles[i] = ohlcCandle{
@@ -286,7 +280,57 @@ func buildCandlesFromHistory(history []float64, open, low, high, close float64, 
 		}
 	}
 
+	// Ensure smooth candle continuity: candle[i+1].open = candle[i].close
+	for i := 1; i < numCandles; i++ {
+		candles[i].open = candles[i-1].close
+		candles[i].high = math.Max(candles[i].high, math.Max(candles[i].open, candles[i].close))
+		candles[i].low = math.Min(candles[i].low, math.Min(candles[i].open, candles[i].close))
+	}
+
 	return candles
+}
+
+// evalSpline performs Catmull-Rom cubic interpolation through raw data points
+func evalSpline(points []float64, t float64) float64 {
+	n := len(points)
+	if n == 1 {
+		return points[0]
+	}
+	if t <= 0 {
+		return points[0]
+	}
+	if t >= 1 {
+		return points[n-1]
+	}
+
+	scaledT := t * float64(n-1)
+	idx := int(math.Floor(scaledT))
+	frac := scaledT - float64(idx)
+
+	p0 := points[maxInt(0, idx-1)]
+	p1 := points[idx]
+	p2 := points[minInt(n-1, idx+1)]
+	p3 := points[minInt(n-1, idx+2)]
+
+	// Catmull-Rom cubic spline formula
+	return 0.5 * ((2.0 * p1) +
+		(-p0+p2)*frac +
+		(2.0*p0-5.0*p1+4.0*p2-p3)*(frac*frac) +
+		(-p0+3.0*p1-3.0*p2+p3)*(frac*frac*frac))
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func renderLargeBrailleChart(item model.CryptoPair, tfIdx int, width int, chartRows int) string {
@@ -307,9 +351,17 @@ func renderLargeBrailleChart(item model.CryptoPair, tfIdx int, width int, chartR
 	subWidth := plotCols * 2
 	subHeight := chartRows * 4 // Braille matrix
 
-	minVal := chartHistory[0]
-	maxVal := chartHistory[0]
-	for _, v := range chartHistory {
+	// Generate smooth continuous points for Braille chart
+	numPts := subWidth
+	splinePts := make([]float64, numPts)
+	for i := 0; i < numPts; i++ {
+		t := float64(i) / float64(numPts-1)
+		splinePts[i] = evalSpline(chartHistory, t)
+	}
+
+	minVal := splinePts[0]
+	maxVal := splinePts[0]
+	for _, v := range splinePts {
 		if v < minVal {
 			minVal = v
 		}
@@ -328,10 +380,9 @@ func renderLargeBrailleChart(item model.CryptoPair, tfIdx int, width int, chartR
 		subGrid[r] = make([]uint8, plotCols)
 	}
 
-	numPts := len(chartHistory)
 	pts := make([][2]int, numPts)
-	for j, val := range chartHistory {
-		x := int(math.Round((float64(j) / float64(numPts-1)) * float64(subWidth-1)))
+	for j, val := range splinePts {
+		x := j
 		norm := (val - minVal) / diff
 		y := (subHeight - 1) - int(math.Round(norm*float64(subHeight-1)))
 		if y < 0 {
