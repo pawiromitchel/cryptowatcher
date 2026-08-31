@@ -48,7 +48,7 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int, car
 	var content string
 
 	if cardMode == 1 {
-		// --- CLEAN HERO PRICE FOCUS VIEW (ONLY THE PRICE, CENTERED WITH PADDING) ---
+		// --- CLEAN HERO PRICE FOCUS VIEW (LARGE 2X WIDE BOLD NUMERALS) ---
 		heroBox := renderHeroPriceBox(item, isBullish, innerWidth)
 
 		// 24H Price Range Bar Slider
@@ -114,6 +114,19 @@ func renderHeroPriceBox(item model.CryptoPair, isBullish bool, innerWidth int) s
 		priceStr = "Error"
 	}
 
+	// Format price with bold full-width characters for 2x wider, larger typography
+	var fw strings.Builder
+	for _, ch := range priceStr {
+		if ch >= '0' && ch <= '9' {
+			fw.WriteRune(rune(ch - '0' + 0xFF10))
+		} else if ch == '$' {
+			fw.WriteString("＄")
+		} else {
+			fw.WriteRune(ch)
+		}
+	}
+	heroContent := fw.String()
+
 	priceStyle := lipgloss.NewStyle().
 		Bold(true)
 
@@ -127,7 +140,7 @@ func renderHeroPriceBox(item model.CryptoPair, isBullish bool, innerWidth int) s
 		Border(lipgloss.RoundedBorder()).
 		Align(lipgloss.Center).
 		Width(boxWidth).
-		Padding(1, 0) // Generous vertical padding to give the price large prominent focus
+		Padding(1, 0) // Generous vertical padding to give the price prominent focus
 
 	if isBullish {
 		boxStyle = boxStyle.BorderForeground(lipgloss.Color("#134e4a"))
@@ -135,7 +148,7 @@ func renderHeroPriceBox(item model.CryptoPair, isBullish bool, innerWidth int) s
 		boxStyle = boxStyle.BorderForeground(lipgloss.Color("#4c0519"))
 	}
 
-	return boxStyle.Render(priceStyle.Render(priceStr))
+	return boxStyle.Render(priceStyle.Render(heroContent))
 }
 
 func formatCompactPrice(price float64) string {
