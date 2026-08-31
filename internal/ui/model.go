@@ -47,6 +47,7 @@ type Model struct {
 	stockCursor        int
 	mode               viewMode
 	inspectorTimeframe int // 0 = 1D, 1 = 1W, 2 = 1M, 3 = 1Y, 4 = ALL
+	inspectorChartType int // 0 = Candlestick, 1 = Line Chart
 	textInput          textinput.Model
 	keys               KeyMap
 	statusMsg          string
@@ -96,6 +97,7 @@ func NewModel(cfg *model.Config, pf fetcher.PriceFetcher) Model {
 		stockCursor:        0,
 		mode:               modeNormal,
 		inspectorTimeframe: 0,
+		inspectorChartType: 0, // 0 = Candlestick by default
 		textInput:          ti,
 		keys:               DefaultKeyMap(),
 		loading:            true,
@@ -271,6 +273,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			case "enter", "space":
 				m.mode = modeNormal
+				return m, nil
+
+			case "c", "v":
+				m.inspectorChartType = 1 - m.inspectorChartType
 				return m, nil
 
 			case "left", "h":

@@ -212,7 +212,14 @@ func TestUIModelInspectorMode(t *testing.T) {
 		t.Errorf("expected inspector timeframe 0 (1D), got %d", m.inspectorTimeframe)
 	}
 
-	// 4. Press Esc to return to normal dashboard mode
+	// 4. Press 'c' to toggle chart type between Candlesticks and Line
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(Model)
+	if m.inspectorChartType != 1 {
+		t.Errorf("expected inspectorChartType 1 after pressing 'c', got %d", m.inspectorChartType)
+	}
+
+	// 5. Press Esc to return to normal dashboard mode
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyEsc})
 	m = updated.(Model)
 	if m.mode != modeNormal {
@@ -236,9 +243,16 @@ func TestRenderInspectorView(t *testing.T) {
 		LastUpdated: time.Now(),
 	}
 
-	view := RenderInspectorView(pair, 0, 100)
-	if view == "" {
-		t.Fatalf("rendered inspector view is empty")
+	// Test Candlestick view (type 0)
+	viewCandles := RenderInspectorView(pair, 0, 0, 100)
+	if viewCandles == "" {
+		t.Fatalf("rendered inspector candlestick view is empty")
+	}
+
+	// Test Line chart view (type 1)
+	viewLine := RenderInspectorView(pair, 0, 1, 100)
+	if viewLine == "" {
+		t.Fatalf("rendered inspector line view is empty")
 	}
 
 	expectedSubstrings := []string{
@@ -253,8 +267,11 @@ func TestRenderInspectorView(t *testing.T) {
 	}
 
 	for _, str := range expectedSubstrings {
-		if !containsSubstring(view, str) {
-			t.Errorf("inspector view missing expected substring %q", str)
+		if !containsSubstring(viewCandles, str) {
+			t.Errorf("inspector candlestick view missing expected substring %q", str)
+		}
+		if !containsSubstring(viewLine, str) {
+			t.Errorf("inspector line view missing expected substring %q", str)
 		}
 	}
 }

@@ -14,12 +14,19 @@ import (
 
 var timeframeLabels = []string{"1D", "1W", "1M", "1Y", "ALL"}
 
+type ohlcCandle struct {
+	open  float64
+	high  float64
+	low   float64
+	close float64
+}
+
 // RenderInspectorView renders the full-screen deep-dive analysis screen for an asset.
-func RenderInspectorView(item model.CryptoPair, activeTimeframe int, totalWidth int) string {
+func RenderInspectorView(item model.CryptoPair, activeTimeframe int, chartType int, totalWidth int) string {
 	if totalWidth <= 0 {
 		totalWidth = 100
 	}
-	innerWidth := totalWidth - 6
+	innerWidth := totalWidth - 8
 	if innerWidth < 60 {
 		innerWidth = 60
 	}
@@ -61,13 +68,18 @@ func RenderInspectorView(item model.CryptoPair, activeTimeframe int, totalWidth 
 	sb.WriteString(statsBanner)
 	sb.WriteString("\n\n")
 
-	// 2. Interactive Timeframe Tabs Bar
-	sb.WriteString(renderTimeframeTabs(activeTimeframe))
+	// 2. Interactive Timeframe Tabs & Chart Mode Switcher Bar
+	sb.WriteString(renderTimeframeTabsWithMode(activeTimeframe, chartType, innerWidth))
 	sb.WriteString("\n\n")
 
-	// 3. Large High-Definition Braille Area Chart
-	chartHeight := 8
-	chartContent := renderLargeBrailleChart(item, activeTimeframe, innerWidth, chartHeight)
+	// 3. Large High-Definition Chart Canvas (Candlestick or Braille Line)
+	chartHeight := 9
+	var chartContent string
+	if chartType == 0 {
+		chartContent = renderCandlestickChart(item, activeTimeframe, innerWidth, chartHeight)
+	} else {
+		chartContent = renderLargeBrailleChart(item, activeTimeframe, innerWidth, chartHeight)
+	}
 	sb.WriteString(chartContent)
 	sb.WriteString("\n\n")
 
@@ -91,7 +103,7 @@ func RenderInspectorView(item model.CryptoPair, activeTimeframe int, totalWidth 
 	}
 
 	footer := fmt.Sprintf(
-		"[Esc / Enter] Back to Dashboard  •  [←/→/Tab] Timeframe  •  [↑/↓] Switch Asset  •  [r] Refresh  (Synced: %s)",
+		"[Esc / Enter] Back to Dashboard  •  [c] Toggle Candles/Line  •  [←/→/Tab] Timeframe  •  [↑/↓] Switch Asset  •  [r] Refresh  (Synced: %s)",
 		lastUpdated,
 	)
 	sb.WriteString(statusBarStyle.Render(footer))
@@ -99,7 +111,7 @@ func RenderInspectorView(item model.CryptoPair, activeTimeframe int, totalWidth 
 	return inspectorBoxStyle.Width(totalWidth - 2).Render(sb.String())
 }
 
-func renderTimeframeTabs(activeIdx int) string {
+func renderTimeframeTabsWithMode(activeIdx int, chartType int, innerWidth int) string {
 	var tabs []string
 	for i, tf := range timeframeLabels {
 		if i == activeIdx {
@@ -108,7 +120,173 @@ func renderTimeframeTabs(activeIdx int) string {
 			tabs = append(tabs, tabInactiveStyle.Render(fmt.Sprintf("   %s   ", tf)))
 		}
 	}
-	return strings.Join(tabs, "  ")
+	tabsBar := strings.Join(tabs, "  ")
+
+	var modeStr string
+	if chartType == 0 {
+		modeStr = selectedWidgetCardStyle.Render(" 🕯️ [c] Candlesticks ")
+	} else {
+		modeStr = selectedWidgetCardStyle.Render(" 📈 [c] Line Chart ")
+	}
+
+	leftWidth := lipgloss.Width(tabsBar)
+	rightWidth := lipgloss.Width(modeStr)
+	gap := innerWidth - leftWidth - rightWidth
+	if gap < 2 {
+		gap = 2
+	}
+
+	return fmt.Sprintf("%s%s%s", tabsBar, strings.Repeat(" ", gap), modeStr)
+}
+
+func renderCandlestickChart(item model.CryptoPair, tfIdx int, width int, chartRows int) string {
+	history := item.History
+	if len(history) < 2 {
+		history = fetcher.GenerateTrendHistory(item.Open24h, item.Low24h, item.High24h, item.Price)
+	}
+
+	chartHistory := resampleOrScaleHistory(history, tfIdx, item.Price)
+
+	yLabelWidth := 11
+	plotCols := width - yLabelWidth - 4
+	if plotCols < 30 {
+		plotCols = 30
+	}
+
+	// Determine number of candles (each candle occupies 2 terminal columns: 1 candle char + 1 space)
+	candleWidth := 2
+	numCandles := plotCols / candleWidth
+	if numCandles < 10 {
+		numCandles = 10
+	}
+
+	candles := buildCandlesFromHistory(chartHistory, item.Open24h, item.Low24h, item.High24h, item.Price, numCandles)
+
+	minVal := candles[0].low
+	maxVal := candles[0].high
+	for _, c := range candles {
+		if c.low < minVal {
+			minVal = c.low
+		}
+		if c.high > maxVal {
+			maxVal = c.high
+		}
+	}
+
+	diff := maxVal - minVal
+	if diff <= 0 {
+		diff = 1.0
+	}
+
+	var sb strings.Builder
+
+	// Render each row from top (highest price) to bottom (lowest price)
+	for r := 0; r < chartRows; r++ {
+		// Price level for this row
+		rowTopVal := maxVal - (float64(r)/float64(chartRows))*diff
+		rowBotVal := maxVal - (float64(r+1)/float64(chartRows))*diff
+
+		yNorm := 1.0 - (float64(r) / float64(chartRows-1))
+		yVal := minVal + yNorm*diff
+		yLabel := padLeft(formatPrice(yVal), yLabelWidth)
+
+		axisChar := "│"
+		if r == chartRows-1 {
+			axisChar = "┼"
+		}
+
+		sb.WriteString(neutralStyle.Render(fmt.Sprintf("%s %s ", yLabel, axisChar)))
+
+		for _, c := range candles {
+			isBull := c.close >= c.open
+			bodyTop := math.Max(c.open, c.close)
+			bodyBot := math.Min(c.open, c.close)
+
+			var char string
+			// Check if row overlaps body
+			if bodyTop >= rowBotVal && bodyBot <= rowTopVal {
+				char = "█"
+			} else if c.high >= rowBotVal && c.low <= rowTopVal {
+				// Row is in wick range
+				char = "│"
+			} else {
+				char = " "
+			}
+
+			if isBull {
+				sb.WriteString(positiveStyle.Render(char + " "))
+			} else {
+				sb.WriteString(negativeStyle.Render(char + " "))
+			}
+		}
+		sb.WriteString("\n")
+	}
+
+	// X-axis timeline line
+	xAxisLen := len(candles) * candleWidth
+	xAxisLine := strings.Repeat("─", xAxisLen)
+	sb.WriteString(neutralStyle.Render(fmt.Sprintf("%s └%s\n", strings.Repeat(" ", yLabelWidth), xAxisLine)))
+
+	// X-axis timeframe labels
+	timelineStr := formatTimeframeLabels(tfIdx, yLabelWidth, xAxisLen)
+	sb.WriteString(neutralStyle.Render(timelineStr))
+
+	return sb.String()
+}
+
+func buildCandlesFromHistory(history []float64, open, low, high, close float64, targetCandles int) []ohlcCandle {
+	ptsLen := len(history)
+	if ptsLen == 0 {
+		return []ohlcCandle{{open: open, high: high, low: low, close: close}}
+	}
+
+	candles := make([]ohlcCandle, targetCandles)
+	ptsPerCandle := float64(ptsLen) / float64(targetCandles)
+
+	for i := 0; i < targetCandles; i++ {
+		startIdx := int(math.Floor(float64(i) * ptsPerCandle))
+		endIdx := int(math.Ceil(float64(i+1) * ptsPerCandle))
+		if endIdx > ptsLen {
+			endIdx = ptsLen
+		}
+		if startIdx >= ptsLen {
+			startIdx = ptsLen - 1
+		}
+		if startIdx >= endIdx {
+			endIdx = startIdx + 1
+		}
+
+		cOpen := history[startIdx]
+		cClose := history[endIdx-1]
+		cHigh := cOpen
+		cLow := cOpen
+
+		for j := startIdx; j < endIdx; j++ {
+			if history[j] > cHigh {
+				cHigh = history[j]
+			}
+			if history[j] < cLow {
+				cLow = history[j]
+			}
+		}
+
+		// Inject micro-volatility wick padding to make candles realistic and readable
+		candleSpread := (cHigh - cLow)
+		if candleSpread < (cHigh * 0.002) {
+			spreadDelta := cHigh * 0.003
+			cHigh += spreadDelta
+			cLow -= spreadDelta
+		}
+
+		candles[i] = ohlcCandle{
+			open:  cOpen,
+			high:  cHigh,
+			low:   cLow,
+			close: cClose,
+		}
+	}
+
+	return candles
 }
 
 func renderLargeBrailleChart(item model.CryptoPair, tfIdx int, width int, chartRows int) string {
@@ -117,7 +295,6 @@ func renderLargeBrailleChart(item model.CryptoPair, tfIdx int, width int, chartR
 		history = fetcher.GenerateTrendHistory(item.Open24h, item.Low24h, item.High24h, item.Price)
 	}
 
-	// Adjust history data points simulated for selected timeframe if needed
 	chartHistory := resampleOrScaleHistory(history, tfIdx, item.Price)
 	isBullish := item.Change24h >= 0
 
@@ -172,9 +349,7 @@ func renderLargeBrailleChart(item model.CryptoPair, tfIdx int, width int, chartR
 
 	var sb strings.Builder
 
-	// Render chart grid with Y-axis price labels
 	for r := 0; r < chartRows; r++ {
-		// Calculate Y label value
 		yNorm := 1.0 - (float64(r) / float64(chartRows-1))
 		yVal := minVal + yNorm*diff
 		yLabel := padLeft(formatPrice(yVal), yLabelWidth)
@@ -205,11 +380,9 @@ func renderLargeBrailleChart(item model.CryptoPair, tfIdx int, width int, chartR
 		sb.WriteString("\n")
 	}
 
-	// X-axis timeline line
 	xAxisLine := strings.Repeat("─", plotCols)
 	sb.WriteString(neutralStyle.Render(fmt.Sprintf("%s └%s\n", strings.Repeat(" ", yLabelWidth), xAxisLine)))
 
-	// X-axis timeframe labels
 	timelineStr := formatTimeframeLabels(tfIdx, yLabelWidth, plotCols)
 	sb.WriteString(neutralStyle.Render(timelineStr))
 
@@ -221,12 +394,12 @@ func renderPriceActionBox(item model.CryptoPair, width int) string {
 	sb.WriteString(subHeaderStyle.Render("⚡ PRICE ACTION & VOLATILITY"))
 	sb.WriteString("\n\n")
 
-	// 24H Price Range Bar Slider
+	// 24H Price Range Bar Slider (use width-8 to prevent border wrapping)
 	lowStr := fmt.Sprintf("Low: %s", formatPrice(item.Low24h))
 	highStr := fmt.Sprintf("High: %s", formatPrice(item.High24h))
-	barWidth := width - 4
-	if barWidth < 20 {
-		barWidth = 20
+	barWidth := width - 8
+	if barWidth < 16 {
+		barWidth = 16
 	}
 	space := barWidth - lipgloss.Width(lowStr) - lipgloss.Width(highStr)
 	if space < 1 {
@@ -319,7 +492,6 @@ func resampleOrScaleHistory(raw []float64, tfIdx int, latestPrice float64) []flo
 		return raw
 	}
 
-	// Generate simulated multi-timeframe series based on current trend & timeframe length
 	length := len(raw)
 	res := make([]float64, length)
 	factor := float64(tfIdx + 1)

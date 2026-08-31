@@ -16,7 +16,7 @@ func (m Model) View() string {
 	if m.mode == modeInspector {
 		active := m.ActivePair()
 		if active != nil {
-			return RenderInspectorView(*active, m.inspectorTimeframe, m.width)
+			return RenderInspectorView(*active, m.inspectorTimeframe, m.inspectorChartType, m.width)
 		}
 	}
 

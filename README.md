@@ -97,6 +97,7 @@ make build
 
 | Key | Action |
 | --- | --- |
+| `c` / `v` | Toggle Chart Mode: **🕯️ Candlesticks (OHLC)** / **📈 Braille Line Chart** |
 | `←` / `→` / `Tab` | Switch Timeframe Tab (`1D`, `1W`, `1M`, `1Y`, `ALL`) |
 | `↑` / `↓` / `k` / `j` | Cycle directly to previous / next asset without leaving inspector |
 | `r` | Force instant price refresh |
