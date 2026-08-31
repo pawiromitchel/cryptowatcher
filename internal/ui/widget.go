@@ -10,6 +10,24 @@ import (
 	"cryptowatcher/internal/model"
 )
 
+// 2-Row Smooth Half-Block Digits for large, clean, modern price numbers
+var doubleHeightDigits = map[rune][2]string{
+	'$': {" ╷ ", "─┼─"},
+	'0': {"█▀█", "█▄█"},
+	'1': {" █ ", " █ "},
+	'2': {"█▀█", "█▄▄"},
+	'3': {"█▀█", "▄▄█"},
+	'4': {"█ █", "▀▀█"},
+	'5': {"█▀▀", "▄▄█"},
+	'6': {"█▀▀", "█▄█"},
+	'7': {"▀▀█", "  █"},
+	'8': {"█▀█", "█▄█"},
+	'9': {"█▀█", "▀▀█"},
+	'.': {" ", "▄"},
+	',': {" ", "‚"},
+	'-': {"▀▀", "  "},
+}
+
 // RenderWidgetCard renders a tall, prominent macOS Stocks-style widget box for a ticker.
 // cardMode: 0 = Line Chart view, 1 = Big Price / Hero Metric view.
 func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int, cardMode int) string {
@@ -48,7 +66,7 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int, car
 	var content string
 
 	if cardMode == 1 {
-		// --- MODERN SLEEK HERO PRICE FOCUS VIEW ---
+		// --- MODERN HERO PRICE FOCUS VIEW (ONLY THE PRICE, LARGE FONT) ---
 		heroBox := renderHeroPriceBox(item, isBullish, innerWidth)
 
 		// 24H Price Range Bar Slider
@@ -104,9 +122,43 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int, car
 }
 
 func renderHeroPriceBox(item model.CryptoPair, isBullish bool, innerWidth int) string {
+	boxWidth := innerWidth - 2
+	if boxWidth < 20 {
+		boxWidth = 20
+	}
+
 	priceStr := formatPrice(item.Price)
 	if item.Err != nil {
 		priceStr = "Error"
+	}
+
+	// Try rendering with 2-row large double-height font
+	var row0, row1 strings.Builder
+	canRenderDoubleHeight := true
+	for _, ch := range priceStr {
+		glyph, ok := doubleHeightDigits[ch]
+		if !ok {
+			canRenderDoubleHeight = false
+			break
+		}
+		row0.WriteString(glyph[0])
+		row1.WriteString(glyph[1])
+	}
+
+	var heroContent string
+	r0 := row0.String()
+	r1 := row1.String()
+	textWidth := lipgloss.Width(r0)
+
+	if canRenderDoubleHeight && textWidth <= boxWidth-2 {
+		pad := (boxWidth - 2 - textWidth) / 2
+		if pad < 0 {
+			pad = 0
+		}
+		padStr := strings.Repeat(" ", pad)
+		heroContent = fmt.Sprintf("%s%s\n%s%s", padStr, r0, padStr, r1)
+	} else {
+		heroContent = priceStr
 	}
 
 	priceStyle := lipgloss.NewStyle().
@@ -123,22 +175,11 @@ func renderHeroPriceBox(item model.CryptoPair, isBullish bool, innerWidth int) s
 			Foreground(redColor)
 	}
 
-	// 24H Price delta in dollars
-	deltaDollar := item.Price - item.Open24h
-	var deltaStr string
-	if isBullish {
-		deltaStr = positiveStyle.Render(fmt.Sprintf("+%s (+%.2f%%)", formatPrice(deltaDollar), item.Change24h))
-	} else {
-		deltaStr = negativeStyle.Render(fmt.Sprintf("-%s (%.2f%%)", formatPrice(math.Abs(deltaDollar)), item.Change24h))
-	}
-
-	heroContent := fmt.Sprintf("%s\n%s", priceStyle.Render(priceStr), deltaStr)
-
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(lipgloss.Color("#2C3240")).
 		Align(lipgloss.Center).
-		Width(innerWidth - 2).
+		Width(boxWidth).
 		Padding(0, 1)
 
 	if isBullish {
@@ -147,7 +188,7 @@ func renderHeroPriceBox(item model.CryptoPair, isBullish bool, innerWidth int) s
 		boxStyle = boxStyle.BorderForeground(lipgloss.Color("#4c0519"))
 	}
 
-	return boxStyle.Render(heroContent)
+	return boxStyle.Render(priceStyle.Render(heroContent))
 }
 
 func formatCompactPrice(price float64) string {
