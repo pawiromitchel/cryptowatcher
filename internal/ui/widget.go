@@ -114,19 +114,6 @@ func renderHeroPriceBox(item model.CryptoPair, isBullish bool, innerWidth int) s
 		priceStr = "Error"
 	}
 
-	// Format price with bold full-width characters for 2x wider, larger typography
-	var fw strings.Builder
-	for _, ch := range priceStr {
-		if ch >= '0' && ch <= '9' {
-			fw.WriteRune(rune(ch - '0' + 0xFF10))
-		} else if ch == '$' {
-			fw.WriteString("＄")
-		} else {
-			fw.WriteRune(ch)
-		}
-	}
-	heroContent := fw.String()
-
 	priceStyle := lipgloss.NewStyle().
 		Bold(true)
 
@@ -148,7 +135,7 @@ func renderHeroPriceBox(item model.CryptoPair, isBullish bool, innerWidth int) s
 		boxStyle = boxStyle.BorderForeground(lipgloss.Color("#4c0519"))
 	}
 
-	return boxStyle.Render(priceStyle.Render(heroContent))
+	return boxStyle.Render(priceStyle.Render(priceStr))
 }
 
 func formatCompactPrice(price float64) string {
