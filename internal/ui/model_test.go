@@ -156,14 +156,21 @@ func TestRenderWidgetCard(t *testing.T) {
 	}
 }
 
-func TestRenderBigPrice(t *testing.T) {
-	rendered := RenderBigPrice(78904.0, true, 26)
-	if rendered == "" {
-		t.Fatalf("rendered big price is empty")
+func TestRenderHeroPriceBox(t *testing.T) {
+	pair := model.CryptoPair{
+		Symbol:    "BTC-USD",
+		Display:   "BTC-USD",
+		Name:      "Bitcoin USD",
+		Price:     78904.00,
+		Open24h:   78000.00,
+		Change24h: 1.15,
 	}
-	lines := strings.Split(rendered, "\n")
-	if len(lines) < 3 {
-		t.Errorf("expected at least 3 lines for big price, got %d", len(lines))
+	rendered := renderHeroPriceBox(pair, true, 26)
+	if rendered == "" {
+		t.Fatalf("rendered hero price box is empty")
+	}
+	if !containsSubstring(rendered, "$78904.00") {
+		t.Errorf("expected hero box to contain $78904.00")
 	}
 }
 
