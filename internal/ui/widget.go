@@ -10,8 +10,32 @@ import (
 	"cryptowatcher/internal/model"
 )
 
+var bigDigitFont = map[rune][3]string{
+	'$': {"╷ ", "─┼", " ╵"},
+	'0': {"┌─┐", "│ │", "└─┘"},
+	'1': {" ╷ ", " │ ", " ╵ "},
+	'2': {"┌─┐", "┌─┘", "└──"},
+	'3': {"┌─┐", " ─┤", "└─┘"},
+	'4': {"╷ ╷", "└──┤", "  ╵"},
+	'5': {"┌─┐", "└─┐", "──┘"},
+	'6': {"┌─┐", "├─┐", "└─┘"},
+	'7': {"──┐", "  │", "  ╵"},
+	'8': {"┌─┐", "├─┤", "└─┘"},
+	'9': {"┌─┐", "└─┤", "──┘"},
+	'.': {" ", " ", "•"},
+	',': {" ", " ", "‚"},
+	'k': {"╷ ╷", "├─┴", "╵ ╵"},
+	'K': {"╷ ╷", "├─┴", "╵ ╵"},
+	'M': {"╷─╷", "│ │", "╵ ╵"},
+	'B': {"┌─┐", "├─┤", "└─┘"},
+	'T': {"──┬", "  │", "  ╵"},
+	'-': {"   ", "───", "   "},
+	'+': {" ╷ ", "─┼─", " ╵ "},
+}
+
 // RenderWidgetCard renders a tall, prominent macOS Stocks-style widget box for a ticker.
-func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) string {
+// cardMode: 0 = Line Chart view, 1 = Big Price Focus view.
+func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int, cardMode int) string {
 	innerWidth := cardWidth - 4
 	if innerWidth < 22 {
 		innerWidth = 22
@@ -44,34 +68,128 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) str
 	}
 	line2 := nameStr + strings.Repeat(" ", space2) + changeStr
 
-	// 3. Tall 3-Row Mini Inline Braille Line Chart
-	chartWidth := innerWidth - 2
-	miniChart := renderWidgetMiniChart(item.History, isBullish, chartWidth, 3)
-	baseLine := lipgloss.NewStyle().Foreground(grayColor).Render(strings.Repeat("┄", chartWidth))
+	var content string
 
-	// 4. Large Bold Price
-	priceStr := widgetPriceStyle.Render(formatPrice(item.Price))
-	if item.Err != nil {
-		priceStr = errorStyle.Render("Error")
-	}
-	spacePrice := innerWidth - lipgloss.Width(priceStr)
-	if spacePrice < 0 {
-		spacePrice = 0
-	}
-	linePrice := strings.Repeat(" ", spacePrice) + priceStr
+	if cardMode == 1 {
+		// --- BIG FONT PRICE FOCUS VIEW ---
+		bigPrice := RenderBigPrice(item.Price, isBullish, innerWidth)
 
-	content := fmt.Sprintf("%s\n%s\n\n%s\n  %s\n\n%s",
-		line1,
-		line2,
-		miniChart,
-		baseLine,
-		linePrice,
-	)
+		// Bottom Subtitle: 24h Range or Volume
+		lowFormatted := formatCompactPrice(item.Low24h)
+		highFormatted := formatCompactPrice(item.High24h)
+		rangeStr := fmt.Sprintf("L: %s  ┄┄  H: %s", lowFormatted, highFormatted)
+		if item.Low24h == 0 && item.High24h == 0 {
+			rangeStr = fmt.Sprintf("24h Vol: %s", formatVolume(item.Volume24h))
+		}
+		rangeRendered := neutralStyle.Render(rangeStr)
+		spaceRange := (innerWidth - lipgloss.Width(rangeRendered)) / 2
+		if spaceRange < 0 {
+			spaceRange = 0
+		}
+		lineBottom := strings.Repeat(" ", spaceRange) + rangeRendered
+
+		content = fmt.Sprintf("%s\n%s\n\n%s\n\n%s",
+			line1,
+			line2,
+			bigPrice,
+			lineBottom,
+		)
+	} else {
+		// --- DEFAULT 3-ROW BRAILLE MINI LINE CHART VIEW ---
+		chartWidth := innerWidth - 2
+		miniChart := renderWidgetMiniChart(item.History, isBullish, chartWidth, 3)
+		baseLine := lipgloss.NewStyle().Foreground(grayColor).Render(strings.Repeat("┄", chartWidth))
+
+		priceStr := widgetPriceStyle.Render(formatPrice(item.Price))
+		if item.Err != nil {
+			priceStr = errorStyle.Render("Error")
+		}
+		spacePrice := innerWidth - lipgloss.Width(priceStr)
+		if spacePrice < 0 {
+			spacePrice = 0
+		}
+		linePrice := strings.Repeat(" ", spacePrice) + priceStr
+
+		content = fmt.Sprintf("%s\n%s\n\n%s\n  %s\n\n%s",
+			line1,
+			line2,
+			miniChart,
+			baseLine,
+			linePrice,
+		)
+	}
 
 	if isSelected {
 		return selectedWidgetCardStyle.Width(cardWidth).Render(content)
 	}
 	return widgetCardStyle.Width(cardWidth).Render(content)
+}
+
+// RenderBigPrice formats a numeric price into a 3-row tall ASCII big digit display.
+func RenderBigPrice(price float64, isBullish bool, maxWidth int) string {
+	formattedStr := formatPriceForBigDigits(price)
+
+	var row0, row1, row2 strings.Builder
+	for _, ch := range formattedStr {
+		glyph, found := bigDigitFont[ch]
+		if !found {
+			glyph = [3]string{" ", " ", string(ch)}
+		}
+		row0.WriteString(glyph[0])
+		row1.WriteString(glyph[1])
+		row2.WriteString(glyph[2])
+	}
+
+	r0 := row0.String()
+	r1 := row1.String()
+	r2 := row2.String()
+
+	textWidth := lipgloss.Width(r0)
+	pad := (maxWidth - textWidth) / 2
+	if pad < 0 {
+		pad = 0
+	}
+	padStr := strings.Repeat(" ", pad)
+
+	res := fmt.Sprintf("%s%s\n%s%s\n%s%s",
+		padStr, r0,
+		padStr, r1,
+		padStr, r2,
+	)
+
+	if isBullish {
+		return positiveStyle.Render(res)
+	}
+	return negativeStyle.Render(res)
+}
+
+func formatPriceForBigDigits(price float64) string {
+	if price >= 100000 {
+		return fmt.Sprintf("$%.0f", price)
+	}
+	if price >= 1000 {
+		return fmt.Sprintf("$%.0f", price)
+	}
+	if price >= 10 {
+		return fmt.Sprintf("$%.2f", price)
+	}
+	if price >= 1 {
+		return fmt.Sprintf("$%.2f", price)
+	}
+	if price >= 0.01 {
+		return fmt.Sprintf("$%.4f", price)
+	}
+	return fmt.Sprintf("$%.4f", price)
+}
+
+func formatCompactPrice(price float64) string {
+	if price >= 1000 {
+		return fmt.Sprintf("$%.1fK", price/1000.0)
+	}
+	if price >= 1 {
+		return fmt.Sprintf("$%.2f", price)
+	}
+	return fmt.Sprintf("$%.4f", price)
 }
 
 func renderWidgetMiniChart(history []float64, isBullish bool, width int, chartRows int) string {
@@ -98,7 +216,7 @@ func renderWidgetMiniChart(history []float64, isBullish bool, width int, chartRo
 	}
 
 	subWidth := width * 2
-	subHeight := chartRows * 4 // each character row has 4 sub-pixels vertically
+	subHeight := chartRows * 4
 
 	minVal := history[0]
 	maxVal := history[0]
@@ -199,18 +317,25 @@ func drawWidgetSubLine(subGrid [][]uint8, x0, y0, x1, y1 int) {
 }
 
 func setWidgetSubPixel(subGrid [][]uint8, x, y int) {
-	if y < 0 || x < 0 {
+	chartRows := len(subGrid)
+	if chartRows == 0 {
 		return
 	}
+	width := len(subGrid[0])
+	subHeight := chartRows * 4
+
+	if x < 0 || x >= width*2 || y < 0 || y >= subHeight {
+		return
+	}
+
 	cellRow := y / 4
 	cellCol := x / 2
-
-	if cellRow < 0 || cellRow >= len(subGrid) || cellCol < 0 || cellCol >= len(subGrid[0]) {
-		return
-	}
-
 	subX := x % 2
 	subY := y % 4
+
+	if cellRow < 0 || cellRow >= chartRows || cellCol < 0 || cellCol >= width {
+		return
+	}
 
 	var bit uint8
 	if subX == 0 {

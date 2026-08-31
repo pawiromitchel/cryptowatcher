@@ -80,7 +80,7 @@ func (m Model) renderWidgetGrid(items []model.CryptoPair, isSectionActive bool, 
 
 	for i, item := range items {
 		isSelected := isSectionActive && (i == selectedIdx)
-		card := RenderWidgetCard(item, isSelected, cardWidth)
+		card := RenderWidgetCard(item, isSelected, cardWidth, m.cardViewMode)
 		currentRow = append(currentRow, card)
 
 		if len(currentRow) == cardsPerRow || i == len(items)-1 {
@@ -144,7 +144,7 @@ func (m Model) renderFooter() string {
 	}
 
 	controls := fmt.Sprintf(
-		"[a] Add Ticker | [d] Remove | [r] Refresh | [←/→/↑/↓] Navigate Grid | [q] Quit  (Last Updated: %s)",
+		"[c] Toggle Price/Chart | [a] Add | [d] Remove | [r] Refresh | [←/→/↑/↓] Grid | [q] Quit  (Synced: %s)",
 		lastUpdatedStr,
 	)
 	sb.WriteString(statusBarStyle.Render(controls))
@@ -177,15 +177,15 @@ func formatChange(change float64) string {
 
 func formatVolume(vol float64) string {
 	if vol >= 1_000_000_000 {
-		return fmt.Sprintf("%.2fB", vol/1_000_000_000)
+		return fmt.Sprintf("$%.2fB", vol/1_000_000_000)
 	}
 	if vol >= 1_000_000 {
-		return fmt.Sprintf("%.2fM", vol/1_000_000)
+		return fmt.Sprintf("$%.2fM", vol/1_000_000)
 	}
 	if vol >= 1_000 {
-		return fmt.Sprintf("%.2fK", vol/1_000)
+		return fmt.Sprintf("$%.2fK", vol/1_000)
 	}
-	return fmt.Sprintf("%.2f", vol)
+	return fmt.Sprintf("$%.2f", vol)
 }
 
 // Ensure time import is referenced properly

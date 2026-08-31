@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"strings"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -123,24 +124,72 @@ func TestRenderWidgetCard(t *testing.T) {
 		Display:   "BTC-USD",
 		Name:      "Bitcoin USD",
 		Price:     78402.00,
+		Low24h:    77000.00,
+		High24h:   79000.00,
 		MarketCap: "$1.57T",
 		Change24h: 1.05,
 		History:   []float64{77500, 77800, 78100, 78402},
 	}
 
-	card := RenderWidgetCard(pair, true, 30)
-	if card == "" {
-		t.Fatalf("rendered widget card is empty")
+	// 1. Test Line Chart card view (mode 0)
+	cardLine := RenderWidgetCard(pair, true, 30, 0)
+	if cardLine == "" {
+		t.Fatalf("rendered line card is empty")
 	}
-
-	if !containsSubstring(card, "BTC-USD") {
+	if !containsSubstring(cardLine, "BTC-USD") {
 		t.Errorf("expected card to contain BTC-USD")
 	}
-	if !containsSubstring(card, "Bitcoin USD") {
-		t.Errorf("expected card to contain Bitcoin USD")
+	if !containsSubstring(cardLine, "$78402.00") {
+		t.Errorf("expected card to contain price $78402.00")
 	}
-	if !containsSubstring(card, "1.57T") {
-		t.Errorf("expected card to contain 1.57T")
+
+	// 2. Test Big Price focus card view (mode 1)
+	cardBigPrice := RenderWidgetCard(pair, true, 30, 1)
+	if cardBigPrice == "" {
+		t.Fatalf("rendered big price card is empty")
+	}
+	if !containsSubstring(cardBigPrice, "BTC-USD") {
+		t.Errorf("expected big price card to contain BTC-USD")
+	}
+	if !containsSubstring(cardBigPrice, "Bitcoin USD") {
+		t.Errorf("expected big price card to contain Bitcoin USD")
+	}
+}
+
+func TestRenderBigPrice(t *testing.T) {
+	rendered := RenderBigPrice(78904.0, true, 26)
+	if rendered == "" {
+		t.Fatalf("rendered big price is empty")
+	}
+	lines := strings.Split(rendered, "\n")
+	if len(lines) < 3 {
+		t.Errorf("expected at least 3 lines for big price, got %d", len(lines))
+	}
+}
+
+func TestUIModelCardModeToggle(t *testing.T) {
+	cfg := model.DefaultConfig()
+	mockFetcher := fetcher.NewMockFetcher()
+	m := NewModel(cfg, mockFetcher)
+
+	if m.cardViewMode != 0 {
+		t.Fatalf("expected initial cardViewMode 0 (Line Chart), got %d", m.cardViewMode)
+	}
+
+	// Press 'c' to toggle to Big Price focus view
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(Model)
+
+	if m.cardViewMode != 1 {
+		t.Fatalf("expected cardViewMode 1 after pressing 'c', got %d", m.cardViewMode)
+	}
+
+	// Press 'c' again to toggle back to Line Chart view
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	m = updated.(Model)
+
+	if m.cardViewMode != 0 {
+		t.Fatalf("expected cardViewMode 0 after pressing 'c' again, got %d", m.cardViewMode)
 	}
 }
 
@@ -167,12 +216,12 @@ func TestFormatVolume(t *testing.T) {
 		input float64
 		want  string
 	}{
-		{500.50, "500.50"},
-		{10687.52, "10.69K"},
-		{106915.89, "106.92K"},
-		{1880137.64, "1.88M"},
-		{261156235.80, "261.16M"},
-		{1500000000.00, "1.50B"},
+		{500.50, "$500.50"},
+		{10687.52, "$10.69K"},
+		{106915.89, "$106.92K"},
+		{1880137.64, "$1.88M"},
+		{261156235.80, "$261.16M"},
+		{1500000000.00, "$1.50B"},
 	}
 
 	for _, tt := range tests {
@@ -184,14 +233,5 @@ func TestFormatVolume(t *testing.T) {
 }
 
 func containsSubstring(s, sub string) bool {
-	return len(s) >= len(sub) && (s == sub || (len(s) > len(sub) && stringSearch(s, sub)))
-}
-
-func stringSearch(s, sub string) bool {
-	for i := 0; i <= len(s)-len(sub); i++ {
-		if s[i:i+len(sub)] == sub {
-			return true
-		}
-	}
-	return false
+	return strings.Contains(s, sub)
 }

@@ -45,6 +45,7 @@ type Model struct {
 	cryptoCursor int
 	stockCursor  int
 	mode         viewMode
+	cardViewMode int // 0 = Line Chart view, 1 = Big Price focus view
 	textInput    textinput.Model
 	keys         KeyMap
 	statusMsg    string
@@ -93,6 +94,7 @@ func NewModel(cfg *model.Config, pf fetcher.PriceFetcher) Model {
 		cryptoCursor: 0,
 		stockCursor:  0,
 		mode:         modeNormal,
+		cardViewMode: 0, // 0 = Line Chart by default
 		textInput:    ti,
 		keys:         DefaultKeyMap(),
 		loading:      true,
@@ -395,6 +397,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.mode = modeAdd
 			m.textInput.Focus()
 			return m, textinput.Blink
+
+		case "c", "v", "t":
+			m.cardViewMode = 1 - m.cardViewMode
+			if m.cardViewMode == 1 {
+				m.statusMsg = "Switched to Big Price focus view"
+			} else {
+				m.statusMsg = "Switched to Line Chart view"
+			}
+			return m, nil
 
 		case "d", "x", "delete":
 			active := m.ActivePair()

@@ -83,12 +83,13 @@ make build
 
 | Key | Action |
 | --- | --- |
+| `c` / `v` | Toggle Widget Card Mode: **Big Font Price** / **3-Row Line Chart** |
 | `←` / `h` | Move selection left |
 | `→` / `l` | Move selection right |
 | `↑` / `k` | Move selection up (within row or across category sections) |
 | `↓` / `j` | Move selection down (within row or across category sections) |
-| `a` / `+` | Add new crypto pair or stock ticker (modal input) |
-| `d` / `x` | Delete selected widget card |
+| `a` / `+` | Add new crypto pair or stock ticker (interactive modal) |
+| `d` / `x` | Remove selected widget card (with confirmation prompt) |
 | `r` | Force instant refresh across all tickers |
 | `q` / `Ctrl+C` | Quit application |
 
