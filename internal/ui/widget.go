@@ -10,27 +10,103 @@ import (
 	"cryptowatcher/internal/model"
 )
 
-var bigDigitFont = map[rune][3]string{
-	'$': {"╷ ", "─┼", " ╵"},
-	'0': {"┌─┐", "│ │", "└─┘"},
-	'1': {" ╷ ", " │ ", " ╵ "},
-	'2': {"┌─┐", "┌─┘", "└──"},
-	'3': {"┌─┐", " ─┤", "└─┘"},
-	'4': {"╷ ╷", "└──┤", "  ╵"},
-	'5': {"┌─┐", "└─┐", "──┘"},
-	'6': {"┌─┐", "├─┐", "└─┘"},
-	'7': {"──┐", "  │", "  ╵"},
-	'8': {"┌─┐", "├─┤", "└─┘"},
-	'9': {"┌─┐", "└─┤", "──┘"},
-	'.': {" ", " ", "•"},
-	',': {" ", " ", "‚"},
-	'k': {"╷ ╷", "├─┴", "╵ ╵"},
-	'K': {"╷ ╷", "├─┴", "╵ ╵"},
-	'M': {"╷─╷", "│ │", "╵ ╵"},
-	'B': {"┌─┐", "├─┤", "└─┘"},
-	'T': {"──┬", "  │", "  ╵"},
-	'-': {"   ", "───", "   "},
-	'+': {" ╷ ", "─┼─", " ╵ "},
+// Solid 3x3 Block Digits Font for crystal-clear, bold terminal display
+var bigSolidDigits = map[rune][3]string{
+	'$': {
+		" ▄ ",
+		"███",
+		" ▀ ",
+	},
+	'0': {
+		"█▀█",
+		"█ █",
+		"█▄█",
+	},
+	'1': {
+		" █ ",
+		" █ ",
+		" █ ",
+	},
+	'2': {
+		"█▀█",
+		" ▄▀",
+		"█▄▄",
+	},
+	'3': {
+		"█▀█",
+		" ▀█",
+		"▀▀▀",
+	},
+	'4': {
+		"█ █",
+		"█▀█",
+		"  █",
+	},
+	'5': {
+		"█▀▀",
+		"▀▀█",
+		"▀▀▀",
+	},
+	'6': {
+		"█▀▀",
+		"█▀█",
+		"▀▀▀",
+	},
+	'7': {
+		"▀▀█",
+		"  █",
+		"  ▀",
+	},
+	'8': {
+		"█▀█",
+		"█▀█",
+		"▀▀▀",
+	},
+	'9': {
+		"█▀█",
+		"▀▀█",
+		"  ▀",
+	},
+	'.': {
+		"   ",
+		"   ",
+		" █ ",
+	},
+	',': {
+		"   ",
+		"   ",
+		" ▄ ",
+	},
+	'k': {
+		"█ █",
+		"█▀▄",
+		"█ █",
+	},
+	'K': {
+		"█ █",
+		"█▀▄",
+		"█ █",
+	},
+	'M': {
+		"█▄█",
+		"█ █",
+		"█ █",
+	},
+	'B': {
+		"█▀█",
+		"█▀▄",
+		"▀▀▀",
+	},
+	'T': {
+		"▀█▀",
+		" █ ",
+		" ▀ ",
+	},
+	'-': {
+		"   ",
+		"▀▀▀",
+		"   ",
+	},
 }
 
 // RenderWidgetCard renders a tall, prominent macOS Stocks-style widget box for a ticker.
@@ -71,28 +147,29 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int, car
 	var content string
 
 	if cardMode == 1 {
-		// --- BIG FONT PRICE FOCUS VIEW ---
+		// --- BIG SOLID PRICE FOCUS VIEW ---
 		bigPrice := RenderBigPrice(item.Price, isBullish, innerWidth)
 
-		// Bottom Subtitle: 24h Range or Volume
+		// 24H Price Range Bar Slider
+		rangeBar := RenderRangeBar(item.Price, item.Low24h, item.High24h, innerWidth)
+
+		// Bottom Subtitle: 24h Low and High
 		lowFormatted := formatCompactPrice(item.Low24h)
 		highFormatted := formatCompactPrice(item.High24h)
-		rangeStr := fmt.Sprintf("L: %s  ┄┄  H: %s", lowFormatted, highFormatted)
-		if item.Low24h == 0 && item.High24h == 0 {
-			rangeStr = fmt.Sprintf("24h Vol: %s", formatVolume(item.Volume24h))
+		lStr := neutralStyle.Render("L: " + lowFormatted)
+		hStr := neutralStyle.Render("H: " + highFormatted)
+		spaceRange := innerWidth - lipgloss.Width(lStr) - lipgloss.Width(hStr)
+		if spaceRange < 1 {
+			spaceRange = 1
 		}
-		rangeRendered := neutralStyle.Render(rangeStr)
-		spaceRange := (innerWidth - lipgloss.Width(rangeRendered)) / 2
-		if spaceRange < 0 {
-			spaceRange = 0
-		}
-		lineBottom := strings.Repeat(" ", spaceRange) + rangeRendered
+		lineRange := lStr + strings.Repeat(" ", spaceRange) + hStr
 
-		content = fmt.Sprintf("%s\n%s\n\n%s\n\n%s",
+		content = fmt.Sprintf("%s\n%s\n\n%s\n\n%s\n%s",
 			line1,
 			line2,
 			bigPrice,
-			lineBottom,
+			rangeBar,
+			lineRange,
 		)
 	} else {
 		// --- DEFAULT 3-ROW BRAILLE MINI LINE CHART VIEW ---
@@ -125,19 +202,26 @@ func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int, car
 	return widgetCardStyle.Width(cardWidth).Render(content)
 }
 
-// RenderBigPrice formats a numeric price into a 3-row tall ASCII big digit display.
+// RenderBigPrice formats a numeric price into a 3-row tall solid block display.
 func RenderBigPrice(price float64, isBullish bool, maxWidth int) string {
 	formattedStr := formatPriceForBigDigits(price)
 
 	var row0, row1, row2 strings.Builder
-	for _, ch := range formattedStr {
-		glyph, found := bigDigitFont[ch]
+	for i, ch := range formattedStr {
+		glyph, found := bigSolidDigits[ch]
 		if !found {
-			glyph = [3]string{" ", " ", string(ch)}
+			glyph = [3]string{"   ", " " + string(ch) + " ", "   "}
 		}
 		row0.WriteString(glyph[0])
 		row1.WriteString(glyph[1])
 		row2.WriteString(glyph[2])
+
+		// Add subtle letter-spacing between digits (except at the very end or after symbols)
+		if i < len(formattedStr)-1 && ch != '.' && ch != ',' {
+			row0.WriteString(" ")
+			row1.WriteString(" ")
+			row2.WriteString(" ")
+		}
 	}
 
 	r0 := row0.String()
