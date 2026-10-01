@@ -2,7 +2,8 @@
 
 A real-time Terminal User Interface (TUI) stocks and cryptocurrency dashboard inspired by the macOS Stocks widget design, built in Go.
 
-![Go Version](https://img.shields.io/badge/Go-1.22%2B-blue)
+![CI](https://github.com/pawiromitchel/cryptowatcher/actions/workflows/ci.yml/badge.svg)
+![Go Version](https://img.shields.io/badge/Go-1.24%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
 <img width="2257" height="2215" alt="bettershot_1788104229515" src="https://github.com/user-attachments/assets/7a3d5e5f-c2ff-4676-bc89-67fe9c3e9bf2" />
@@ -11,22 +12,17 @@ A real-time Terminal User Interface (TUI) stocks and cryptocurrency dashboard in
 
 ## Features
 
-- **macOS Stocks-Style Widget Cards**: Clean, rounded widget cards for every monitored asset featuring:
-  - Up/Down indicator (`▲`/`▼`) with ticker symbol & full asset name.
-  - Formatted Market Cap badge (e.g. `$1.57T`, `$297.3B`, `$3.45T`) and color-coded 24h percentage change (+/-).
-  - **Inline High-Definition Braille Mini Line Chart** ($3 \times 4 = 12$ sub-pixel vertical resolution) with reference dotted baseline (`┄┄┄┄┄┄`).
-  - Prominent spot price formatted to currency precision.
-- **Categorized Dashboard Layout**:
-  - **🪙 Cryptocurrency**: Bitcoin, Ethereum, Solana, Dogecoin, Avalanche, etc.
-  - **📈 Stocks & Equities**: S&P 500 (`SPY`), Tesla (`TSLA`), Alphabet (`GOOGL`), Apple (`AAPL`), NVIDIA (`NVDA`), etc.
-- **Composite Multi-Feed Engine (`MultiFetcher`)**:
-  - **Coinbase Exchange REST API**: High-frequency orderbook data and 24-hour hourly candle series for crypto pairs (`BTC`, `ETH`, `SOL`, `DOGE`).
-  - **CoinGecko REST API**: Dynamic resolution for thousands of altcoins, meme tokens, and on-chain assets (e.g. `HMM` / Thinking Cat, `PEPE`, `WIF`, `BONK`, `RENDER`).
-  - **Equity Market Feed**: Intraday 15-minute price quotes and historical trends for US stocks and ETFs (`SPY`, `TSLA`, `GOOGL`, `AAPL`, `NVDA`).
-  - **Smart Routing & Auto-Categorization**: Enter any symbol (e.g. `HMM`, `NVDA`, `DOGE`, `AAPL`, `SOL`) and the engine automatically routes, fetches, and appends it to the matching category.
-- **2D Interactive Grid Navigation**: Navigate horizontally and vertically across widget cards and category sections using arrow keys or Vim keys (`h`/`j`/`k`/`l`).
-- **Persistent Configuration**: Watchlists automatically persist across runs in `~/.config/cryptowatcher/config.json`.
-- **Top Summary Dashboard**: Real-time asset count, top 24h gainer, top 24h loser, and feed connection status.
+- **Widget cards** for every asset: direction arrow, symbol, name, market cap, 24h change, a high-resolution braille line chart and the spot price.
+- **Honest data.** A missing value is shown as `—`. Nothing is estimated: no made-up market caps, no synthetic charts, no guessed highs/lows.
+- **Resilient refresh.** If a provider fails or rate-limits you, the card keeps its last price and is flagged `stale HH:MM`; the header shows `LIVE`, `PARTIAL n/m` or `OFFLINE`. Providers back off automatically after an HTTP 429.
+- **Smart ticker routing.** Type any symbol and it is resolved to the right asset class:
+  - known stocks go straight to Yahoo Finance;
+  - crypto is looked up on Coinbase, then CoinGecko, then DexScreener (on-chain tokens);
+  - an unlisted ticker (e.g. `AMD`) is probed on Coinbase, then Yahoo, then CoinGecko/DexScreener, and only **exact** symbol matches are accepted — it will never silently show a different asset.
+- **Detail view** (`enter`): large chart, 24h range bar, open, volume, market cap, data source and last-update time.
+- **Reorder and sort** your lists (`[` / `]`, `s`); the order is saved.
+- **Responsive layout**: 1–4 cards per row depending on terminal width, with scrolling on short terminals.
+- **Safe configuration**: atomic writes; a corrupt `config.json` is moved to `config.json.bak` and you are told, never silently overwritten.
 
 ---
 
@@ -70,7 +66,7 @@ chmod +x cryptowatcher-darwin-arm64
 
 ### Build from Source
 
-Prerequisites: Go 1.22+ installed.
+Prerequisites: Go 1.24+ installed.
 
 ```bash
 git clone git@github.com:pawiromitchel/cryptowatcher.git
@@ -81,82 +77,94 @@ make build
 
 ---
 
+---
+
 ## Keybindings
 
 | Key | Action |
 | --- | --- |
-| `←` / `h` | Move selection left |
-| `→` / `l` | Move selection right |
-| `↑` / `k` | Move selection up (within row or across category sections) |
-| `↓` / `j` | Move selection down (within row or across category sections) |
-| `a` / `+` | Add new crypto pair or stock ticker (modal input) |
-| `d` / `x` | Delete selected widget card |
-| `r` | Force instant refresh across all tickers |
-| `q` / `Ctrl+C` | Quit application |
+| `←` `↓` `↑` `→` / `h` `j` `k` `l` | Move between cards (rows wrap into the next section) |
+| `enter` | Open / close the detail view |
+| `a` / `+` | Add a ticker |
+| `d` / `x` | Remove the selected ticker (asks for confirmation) |
+| `[` / `]` | Move the selected card earlier / later |
+| `s` | Sort the current section by 24h change |
+| `r` | Refresh now |
+| `?` | Toggle full help |
+| `q` / `Ctrl+C` | Quit (`q` closes the detail view first) |
 
 ---
 
 ## Configuration
 
-Settings and watchlists are stored in JSON format at `~/.config/cryptowatcher/config.json`:
+Settings and watchlists are stored at `~/.config/cryptowatcher/config.json` (or `$XDG_CONFIG_HOME/cryptowatcher/config.json`; run `cryptowatcher -config-path` to print it):
 
 ```json
 {
-  "crypto_pairs": [
-    "BTC-USD",
-    "ETH-USD",
-    "SOL-USD"
-  ],
-  "stock_pairs": [
-    "SPY",
-    "TSLA",
-    "GOOGL",
-    "AAPL"
-  ],
-  "refresh_interval": 5
+  "crypto_pairs": ["BTC-USD", "ETH-USD", "SOL-USD"],
+  "stock_pairs": ["SPY", "TSLA", "GOOGL", "AAPL"],
+  "refresh_interval": 15
 }
 ```
 
+`refresh_interval` is in seconds (default 15, minimum 5). The lists are edited from the UI.
+
 CLI flags:
-* `-interval <seconds>`: Override live refresh polling interval (default: `5s`).
-* `-mock`: Run with synthetic data generator (useful for offline demo/testing).
-* `-config-path`: Print absolute path to configuration file and exit.
+
+| Flag | Description |
+| --- | --- |
+| `-interval <seconds>` | Override the refresh interval (minimum 5) |
+| `-mock` | Use deterministic synthetic data (offline demo) |
+| `-config-path` | Print the configuration file path and exit |
+| `-version` | Print the version and exit |
 
 ---
 
-## Testing
+## Data sources and limits
 
-Run unit tests across all packages:
+| Asset | Provider | Notes |
+| --- | --- | --- |
+| Major crypto | Coinbase Exchange | Price, 24h stats, hourly candles (cached 5 min) |
+| Long-tail crypto | CoinGecko (free tier) | Quotes cached 60s; ~30 calls/min limit, handled with backoff |
+| On-chain tokens | DexScreener | Price/volume only; no high/low or chart |
+| Stocks, ETFs | Yahoo Finance (unofficial endpoint) | May change without notice; no market cap |
+| Market cap for crypto | CoinGecko | Cached 10 min |
 
-```bash
-go test -v ./...
-```
-
-Run in mock mode:
-
-```bash
-./cryptowatcher -mock
-```
+This is an informational tool, not investment advice. Prices may be delayed or unavailable.
 
 ---
 
-## Project Structure
+## Development
+
+```bash
+make test        # go test -race ./...  (unit + e2e)
+make test-e2e    # end-to-end only, verbose
+make cover       # unit-test coverage
+make run-mock    # run the UI with synthetic data
+make release     # cross-compile all targets into dist/
+```
+
+### Test layers
+
+- **Unit** (`internal/...`): symbol routing, providers (against in-process fake APIs), caching and rate-limit backoff, config safety, UI state machine and rendering.
+- **End-to-end** (`e2e/`): the real UI, router and config file driven against fake provider servers — startup, add/remove/reorder/sort, outages and recovery, rate limiting, restart persistence — plus the compiled binary run on a real pseudo-terminal.
+
+The fake providers live in `internal/fakeapi` and can inject HTTP errors and rate limits.
+
+### Project structure
 
 ```
-cryptowatcher/
-├── cmd/
-│   └── cryptowatcher/
-│       └── main.go          # Application entrypoint & multi-provider wiring
-├── internal/
-│   ├── config/              # Persistent JSON configuration manager
-│   ├── fetcher/             # Data providers (Coinbase, Equity, MultiFetcher, Mock)
-│   ├── model/               # Core domain models (CryptoPair, AssetType, Config)
-│   └── ui/                  # Bubble Tea TUI components, widget card renderer & styles
-└── go.mod
+cmd/cryptowatcher/   entrypoint and flag handling
+internal/config/     load/save of the watchlist (atomic, corruption-safe)
+internal/fetcher/    Coinbase, CoinGecko/DexScreener, Yahoo providers; routing MultiFetcher; mock
+internal/fakeapi/    in-process fake provider servers for tests
+internal/model/      shared types (Asset, Config)
+internal/ui/         Bubble Tea model, views, cards, charts, keymap
+e2e/                 end-to-end tests
 ```
 
 ---
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+MIT — see [LICENSE](LICENSE).

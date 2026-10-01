@@ -8,10 +8,11 @@ class Cryptowatcher < Formula
   depends_on "go" => :build
 
   def install
-    system "go", "build", *std_go_args(ldflags: "-s -w"), "./cmd/cryptowatcher"
+    system "go", "build", *std_go_args(ldflags: "-s -w -X main.version=v#{version}"), "./cmd/cryptowatcher"
   end
 
   test do
     assert_match "config.json", shell_output("#{bin}/cryptowatcher -config-path")
+    assert_match version.to_s, shell_output("#{bin}/cryptowatcher -version")
   end
 end
