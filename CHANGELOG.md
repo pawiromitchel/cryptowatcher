@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v1.2.0 - 2026-10-01
 
 ### Fixed
 - A failed or rate-limited refresh no longer blanks cards; the last good price is kept and marked stale.
