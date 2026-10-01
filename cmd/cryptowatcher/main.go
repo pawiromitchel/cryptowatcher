@@ -1,3 +1,4 @@
+// Command cryptowatcher is a terminal dashboard for crypto and stock prices.
 package main
 
 import (
@@ -12,49 +13,63 @@ import (
 	"cryptowatcher/internal/ui"
 )
 
+// version is set at build time: -ldflags "-X main.version=v1.2.3".
+var version = "dev"
+
 func main() {
-	useMock := flag.Bool("mock", false, "Use mock data fetcher for testing")
-	intervalFlag := flag.Int("interval", 0, "Override price refresh interval in seconds")
-	showConfig := flag.Bool("config-path", false, "Print path to configuration file and exit")
+	os.Exit(run())
+}
+
+func run() int {
+	useMock := flag.Bool("mock", false, "use synthetic offline data instead of live APIs")
+	interval := flag.Int("interval", 0, "refresh interval in seconds (minimum 5; overrides the config file)")
+	showConfig := flag.Bool("config-path", false, "print the configuration file path and exit")
+	showVersion := flag.Bool("version", false, "print the version and exit")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("cryptowatcher", version)
+		return 0
+	}
 
 	if *showConfig {
 		path, err := config.GetConfigPath()
 		if err != nil {
-			fmt.Printf("Error resolving config path: %v\n", err)
-			os.Exit(1)
+			fmt.Fprintf(os.Stderr, "cryptowatcher: resolving config path: %v\n", err)
+			return 1
 		}
 		fmt.Println(path)
-		return
+		return 0
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to load configuration: %v\n", err)
+	cfg, cfgErr := config.Load()
+	if *interval > 0 {
+		if *interval < 5 {
+			fmt.Fprintln(os.Stderr, "cryptowatcher: -interval must be at least 5 seconds")
+			return 2
+		}
+		cfg.RefreshInterval = *interval
 	}
 
-	if *intervalFlag > 0 {
-		cfg.RefreshInterval = *intervalFlag
-	}
-
-	var priceFetcher fetcher.PriceFetcher
+	var pf fetcher.PriceFetcher
 	if *useMock {
-		priceFetcher = fetcher.NewMockFetcher()
+		pf = fetcher.NewMockFetcher()
 	} else {
-		priceFetcher = fetcher.NewMultiFetcher(
+		pf = fetcher.NewMultiFetcher(
 			fetcher.NewCoinbaseFetcher(),
 			fetcher.NewCoinGeckoFetcher(),
-			fetcher.NewPythFetcher(),
+			fetcher.NewYahooFetcher(),
 		)
 	}
 
-	p := tea.NewProgram(
-		ui.NewModel(cfg, priceFetcher),
-		tea.WithAltScreen(),
-	)
-
-	if _, err := p.Run(); err != nil {
-		fmt.Fprintf(os.Stderr, "Application error: %v\n", err)
-		os.Exit(1)
+	m := ui.NewModel(cfg, pf)
+	if cfgErr != nil {
+		m = m.WithNotice("Config warning: "+cfgErr.Error(), true)
 	}
+
+	if _, err := tea.NewProgram(m, tea.WithAltScreen()).Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "cryptowatcher: %v\n", err)
+		return 1
+	}
+	return 0
 }

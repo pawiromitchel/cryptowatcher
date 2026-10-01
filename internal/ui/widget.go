@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"fmt"
 	"math"
 	"strings"
 
@@ -10,181 +9,147 @@ import (
 	"cryptowatcher/internal/model"
 )
 
-// RenderWidgetCard renders a tall, prominent macOS Stocks-style widget box for a ticker.
-func RenderWidgetCard(item model.CryptoPair, isSelected bool, cardWidth int) string {
-	innerWidth := cardWidth - 4
-	if innerWidth < 22 {
-		innerWidth = 22
+// RenderWidgetCard renders a macOS Stocks-style card for one asset. cardWidth
+// is the lipgloss width of the card (content plus horizontal padding).
+func RenderWidgetCard(item model.Asset, isSelected bool, cardWidth int) string {
+	inner := cardWidth - 2 // minus horizontal padding
+	if inner < 20 {
+		inner = 20
 	}
+	bullish := item.Change24h >= 0
 
-	isBullish := item.Change24h >= 0
-
-	// 1. Top Header: Triangle Indicator + Symbol + Market Cap
-	var arrow string
-	if isBullish {
-		arrow = positiveStyle.Render("▲")
-	} else {
+	// Line 1: direction arrow + symbol, market cap on the right.
+	arrow := positiveStyle.Render("▲")
+	if !bullish {
 		arrow = negativeStyle.Render("▼")
 	}
-
-	symStr := fmt.Sprintf("%s %s", arrow, widgetSymbolStyle.Render(item.Display))
-	capStr := widgetCapStyle.Render(item.MarketCap)
-	space1 := innerWidth - lipgloss.Width(symStr) - lipgloss.Width(capStr)
-	if space1 < 1 {
-		space1 = 1
+	if !item.HasQuote() {
+		arrow = mutedStyle.Render("•")
 	}
-	line1 := symStr + strings.Repeat(" ", space1) + capStr
+	left := arrow + " " + widgetSymbolStyle.Render(truncate(item.Display, inner-12))
+	right := widgetCapStyle.Render(formatCompactUSD(item.MarketCap))
+	line1 := padBetween(left, right, inner, lipgloss.Width(left), lipgloss.Width(right))
 
-	// 2. Subhead: Asset Name + 24h Change %
-	nameStr := widgetNameStyle.Render(truncateString(item.Name, 14))
-	changeStr := formatChange(item.Change24h)
-	space2 := innerWidth - lipgloss.Width(nameStr) - lipgloss.Width(changeStr)
-	if space2 < 1 {
-		space2 = 1
+	// Line 2: name on the left, 24h change on the right.
+	change := mutedStyle.Render(dash)
+	if item.HasQuote() {
+		change = formatChange(item.Change24h)
 	}
-	line2 := nameStr + strings.Repeat(" ", space2) + changeStr
+	name := widgetNameStyle.Render(truncate(item.Name, inner-lipgloss.Width(change)-2))
+	line2 := padBetween(name, change, inner, lipgloss.Width(name), lipgloss.Width(change))
 
-	// 3. Tall 3-Row Mini Inline Braille Line Chart
-	chartWidth := innerWidth - 2
-	miniChart := renderWidgetMiniChart(item.History, isBullish, chartWidth, 3)
-	baseLine := lipgloss.NewStyle().Foreground(grayColor).Render(strings.Repeat("┄", chartWidth))
+	// Chart rows.
+	chart := renderChart(item.History, bullish, inner-2, 3, "no chart data")
 
-	// 4. Large Bold Price
-	priceStr := widgetPriceStyle.Render(formatPrice(item.Price))
-	if item.Err != nil {
-		priceStr = errorStyle.Render("Error")
+	// Price line: price right-aligned, with a state note on the left.
+	var note, price string
+	switch {
+	case !item.HasQuote() && item.Err != nil:
+		note = errorStyle.Render("unavailable")
+		price = mutedStyle.Render(dash)
+	case !item.HasQuote():
+		note = mutedStyle.Render("loading…")
+		price = mutedStyle.Render(dash)
+	case item.Stale:
+		note = warnStyle.Render("stale " + item.LastUpdated.Format("15:04"))
+		price = mutedStyle.Render(formatPrice(item.Price))
+	default:
+		price = widgetPriceStyle.Render(formatPrice(item.Price))
 	}
-	spacePrice := innerWidth - lipgloss.Width(priceStr)
-	if spacePrice < 0 {
-		spacePrice = 0
-	}
-	linePrice := strings.Repeat(" ", spacePrice) + priceStr
+	priceLine := padBetween(note, price, inner, lipgloss.Width(note), lipgloss.Width(price))
 
-	content := fmt.Sprintf("%s\n%s\n\n%s\n  %s\n\n%s",
-		line1,
-		line2,
-		miniChart,
-		baseLine,
-		linePrice,
-	)
-
+	content := strings.Join([]string{line1, line2, "", chart, "", priceLine}, "\n")
 	if isSelected {
 		return selectedWidgetCardStyle.Width(cardWidth).Render(content)
 	}
 	return widgetCardStyle.Width(cardWidth).Render(content)
 }
 
-func renderWidgetMiniChart(history []float64, isBullish bool, width int, chartRows int) string {
-	if chartRows < 1 {
-		chartRows = 3
+// renderChart draws history as a braille line chart rows terminal rows tall and
+// width cells wide, indented by two spaces. With fewer than two points it draws
+// a muted placeholder instead.
+func renderChart(history []float64, bullish bool, width, rows int, placeholder string) string {
+	if width < 4 {
+		width = 4
 	}
+	pad := strings.Repeat(" ", 2)
 
 	if len(history) < 2 {
-		var sb strings.Builder
-		for r := 0; r < chartRows; r++ {
-			if r == chartRows-1 {
-				sb.WriteString("  " + strings.Repeat("⠒", width))
-			} else {
-				sb.WriteString("  " + strings.Repeat(" ", width))
-			}
-			if r < chartRows-1 {
-				sb.WriteString("\n")
-			}
+		lines := make([]string, rows)
+		for i := range lines {
+			lines[i] = pad + strings.Repeat(" ", width)
 		}
-		if isBullish {
-			return positiveStyle.Render(sb.String())
-		}
-		return negativeStyle.Render(sb.String())
+		msg := truncate(placeholder, width)
+		mid := rows / 2
+		lines[mid] = pad + strings.Repeat(" ", (width-lipgloss.Width(msg))/2) + mutedStyle.Render(msg)
+		return strings.Join(lines, "\n")
 	}
 
-	subWidth := width * 2
-	subHeight := chartRows * 4 // each character row has 4 sub-pixels vertically
-
-	minVal := history[0]
-	maxVal := history[0]
+	subWidth, subHeight := width*2, rows*4
+	minVal, maxVal := history[0], history[0]
 	for _, v := range history {
-		if v < minVal {
-			minVal = v
-		}
-		if v > maxVal {
-			maxVal = v
-		}
+		minVal, maxVal = math.Min(minVal, v), math.Max(maxVal, v)
 	}
-
 	diff := maxVal - minVal
 	if diff == 0 {
-		diff = 1.0
+		diff = 1
 	}
 
-	subGrid := make([][]uint8, chartRows)
-	for r := 0; r < chartRows; r++ {
-		subGrid[r] = make([]uint8, width)
+	grid := make([][]uint8, rows)
+	for r := range grid {
+		grid[r] = make([]uint8, width)
 	}
 
-	numPts := len(history)
-	pts := make([][2]int, numPts)
-	for j, val := range history {
-		x := int(math.Round((float64(j) / float64(numPts-1)) * float64(subWidth-1)))
-		norm := (val - minVal) / diff
-		y := (subHeight - 1) - int(math.Round(norm*float64(subHeight-1)))
-		if y < 0 {
-			y = 0
-		}
-		if y >= subHeight {
-			y = subHeight - 1
-		}
-		pts[j] = [2]int{x, y}
+	pts := make([][2]int, len(history))
+	for j, v := range history {
+		x := int(math.Round(float64(j) / float64(len(history)-1) * float64(subWidth-1)))
+		y := (subHeight - 1) - int(math.Round((v-minVal)/diff*float64(subHeight-1)))
+		pts[j] = [2]int{x, clampInt(y, 0, subHeight-1)}
+	}
+	for j := 0; j < len(pts)-1; j++ {
+		drawLine(grid, pts[j][0], pts[j][1], pts[j+1][0], pts[j+1][1])
 	}
 
-	for j := 0; j < numPts-1; j++ {
-		drawWidgetSubLine(subGrid, pts[j][0], pts[j][1], pts[j+1][0], pts[j+1][1])
+	style := positiveStyle
+	if !bullish {
+		style = negativeStyle
 	}
-
-	var sb strings.Builder
-	for r := 0; r < chartRows; r++ {
-		sb.WriteString("  ")
-		var rowSb strings.Builder
+	lines := make([]string, rows)
+	for r := 0; r < rows; r++ {
+		var row strings.Builder
 		for c := 0; c < width; c++ {
-			bitmask := subGrid[r][c]
-			if bitmask > 0 {
-				rRune := rune(0x2800 + uint16(bitmask))
-				rowSb.WriteRune(rRune)
+			if mask := grid[r][c]; mask > 0 {
+				row.WriteRune(rune(0x2800 + uint16(mask)))
 			} else {
-				rowSb.WriteRune(' ')
+				row.WriteRune(' ')
 			}
 		}
-
-		if isBullish {
-			sb.WriteString(positiveStyle.Render(rowSb.String()))
-		} else {
-			sb.WriteString(negativeStyle.Render(rowSb.String()))
-		}
-
-		if r < chartRows-1 {
-			sb.WriteString("\n")
-		}
+		lines[r] = pad + style.Render(row.String())
 	}
-
-	return sb.String()
+	return strings.Join(lines, "\n")
 }
 
-func drawWidgetSubLine(subGrid [][]uint8, x0, y0, x1, y1 int) {
-	dx := absInt(x1 - x0)
-	dy := absInt(y1 - y0)
-	sx := -1
+// brailleBits maps a sub-pixel (x in 0..1, y in 0..3) to its braille dot bit.
+var brailleBits = [2][4]uint8{
+	{0x01, 0x02, 0x04, 0x40},
+	{0x08, 0x10, 0x20, 0x80},
+}
+
+// drawLine rasterizes a Bresenham line onto the braille sub-pixel grid.
+func drawLine(grid [][]uint8, x0, y0, x1, y1 int) {
+	dx, dy := absInt(x1-x0), absInt(y1-y0)
+	sx, sy := -1, -1
 	if x0 < x1 {
 		sx = 1
 	}
-	sy := -1
 	if y0 < y1 {
 		sy = 1
 	}
 	err := dx - dy
-
 	for {
-		setWidgetSubPixel(subGrid, x0, y0)
+		setSubPixel(grid, x0, y0)
 		if x0 == x1 && y0 == y1 {
-			break
+			return
 		}
 		e2 := 2 * err
 		if e2 > -dy {
@@ -198,53 +163,15 @@ func drawWidgetSubLine(subGrid [][]uint8, x0, y0, x1, y1 int) {
 	}
 }
 
-func setWidgetSubPixel(subGrid [][]uint8, x, y int) {
-	if y < 0 || x < 0 {
+func setSubPixel(grid [][]uint8, x, y int) {
+	if x < 0 || y < 0 {
 		return
 	}
-	cellRow := y / 4
-	cellCol := x / 2
-
-	if cellRow < 0 || cellRow >= len(subGrid) || cellCol < 0 || cellCol >= len(subGrid[0]) {
+	row, col := y/4, x/2
+	if row >= len(grid) || col >= len(grid[0]) {
 		return
 	}
-
-	subX := x % 2
-	subY := y % 4
-
-	var bit uint8
-	if subX == 0 {
-		switch subY {
-		case 0:
-			bit = 0x01
-		case 1:
-			bit = 0x02
-		case 2:
-			bit = 0x04
-		case 3:
-			bit = 0x40
-		}
-	} else {
-		switch subY {
-		case 0:
-			bit = 0x08
-		case 1:
-			bit = 0x10
-		case 2:
-			bit = 0x20
-		case 3:
-			bit = 0x80
-		}
-	}
-
-	subGrid[cellRow][cellCol] |= bit
-}
-
-func truncateString(s string, maxLen int) string {
-	if len(s) <= maxLen {
-		return s
-	}
-	return s[:maxLen-1] + "…"
+	grid[row][col] |= brailleBits[x%2][y%4]
 }
 
 func absInt(n int) int {
@@ -252,4 +179,14 @@ func absInt(n int) int {
 		return -n
 	}
 	return n
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
 }

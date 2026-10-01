@@ -2,238 +2,91 @@ package fetcher
 
 import (
 	"context"
+	"hash/fnv"
 	"math"
 	"time"
 
 	"cryptowatcher/internal/model"
 )
 
-// MockFetcher provides synthetic ticker data for testing and offline modes.
+// MockFetcher produces deterministic synthetic quotes for demos (-mock) and
+// tests. Unlike the real providers it resolves any valid symbol.
 type MockFetcher struct {
-	MockData map[string]model.CryptoPair
+	// Now returns the clock used for LastUpdated and price drift; override in tests.
+	Now func() time.Time
 }
 
-// NewMockFetcher initializes a MockFetcher populated with default crypto and stock data.
-func NewMockFetcher() *MockFetcher {
-	btcCandles := generateMockOHLC(91600.00, 96420.50, 0.0)
-	ethCandles := generateMockOHLC(2792.00, 2750.25, 0.5)
-	solCandles := generateMockOHLC(165.25, 185.75, 1.0)
-	spyCandles := generateMockOHLC(560.00, 571.20, 0.2)
-	tslaCandles := generateMockOHLC(208.00, 215.30, 0.8)
-	googlCandles := generateMockOHLC(164.00, 168.40, 0.4)
-	aaplCandles := generateMockOHLC(220.00, 225.50, 0.6)
+// NewMockFetcher returns a MockFetcher.
+func NewMockFetcher() *MockFetcher { return &MockFetcher{Now: time.Now} }
 
-	return &MockFetcher{
-		MockData: map[string]model.CryptoPair{
-			"BTC-USD": {
-				Symbol:      "BTC-USD",
-				Display:     "BTC-USD",
-				Name:        "Bitcoin USD",
-				Type:        model.AssetCrypto,
-				Price:       78402.00,
-				Open24h:     77584.00,
-				High24h:     78500.00,
-				Low24h:      77557.00,
-				Volume24h:   24510.33,
-				MarketCap:   "$1.57T",
-				Change24h:   1.05,
-				Change7D:    5.20,
-				History:     generateMock7D(77584.00, 78402.00, 0.0),
-				History7D:   extractCloses(btcCandles),
-				Candles:     btcCandles,
-				LastUpdated: time.Now(),
-			},
-			"ETH-USD": {
-				Symbol:      "ETH-USD",
-				Display:     "ETH-USD",
-				Name:        "Ethereum USD",
-				Type:        model.AssetCrypto,
-				Price:       2467.42,
-				Open24h:     2435.00,
-				High24h:     2470.00,
-				Low24h:      2432.00,
-				Volume24h:   184200.50,
-				MarketCap:   "$297.3B",
-				Change24h:   1.31,
-				Change7D:    -1.50,
-				History:     generateMock7D(2435.00, 2467.42, 0.5),
-				History7D:   extractCloses(ethCandles),
-				Candles:     ethCandles,
-				LastUpdated: time.Now(),
-			},
-			"SOL-USD": {
-				Symbol:      "SOL-USD",
-				Display:     "SOL-USD",
-				Name:        "Solana USD",
-				Type:        model.AssetCrypto,
-				Price:       105.52,
-				Open24h:     103.60,
-				High24h:     106.20,
-				Low24h:      103.10,
-				Volume24h:   892000.10,
-				MarketCap:   "$49.6B",
-				Change24h:   1.82,
-				Change7D:    10.50,
-				History:     generateMock7D(103.60, 105.52, 1.0),
-				History7D:   extractCloses(solCandles),
-				Candles:     solCandles,
-				LastUpdated: time.Now(),
-			},
-			"SPY": {
-				Symbol:      "SPY",
-				Display:     "S&P 500",
-				Name:        "S&P 500 ETF",
-				Type:        model.AssetStock,
-				Price:       571.20,
-				Open24h:     573.20,
-				High24h:     574.00,
-				Low24h:      570.10,
-				Volume24h:   55000000.0,
-				MarketCap:   "$550B",
-				Change24h:   -0.35,
-				Change7D:    1.20,
-				History:     generateMock7D(573.20, 571.20, 0.2),
-				History7D:   extractCloses(spyCandles),
-				Candles:     spyCandles,
-				LastUpdated: time.Now(),
-			},
-			"TSLA": {
-				Symbol:      "TSLA",
-				Display:     "TSLA",
-				Name:        "Tesla Inc",
-				Type:        model.AssetStock,
-				Price:       215.30,
-				Open24h:     208.20,
-				High24h:     216.50,
-				Low24h:      207.80,
-				Volume24h:   82000000.0,
-				MarketCap:   "$685B",
-				Change24h:   3.41,
-				Change7D:    6.80,
-				History:     generateMock7D(208.20, 215.30, 0.8),
-				History7D:   extractCloses(tslaCandles),
-				Candles:     tslaCandles,
-				LastUpdated: time.Now(),
-			},
-			"GOOGL": {
-				Symbol:      "GOOGL",
-				Display:     "GOOGL",
-				Name:        "Alphabet Inc",
-				Type:        model.AssetStock,
-				Price:       168.40,
-				Open24h:     167.00,
-				High24h:     169.10,
-				Low24h:      166.50,
-				Volume24h:   21000000.0,
-				MarketCap:   "$2.05T",
-				Change24h:   0.84,
-				Change7D:    2.10,
-				History:     generateMock7D(167.00, 168.40, 0.4),
-				History7D:   extractCloses(googlCandles),
-				Candles:     googlCandles,
-				LastUpdated: time.Now(),
-			},
-			"AAPL": {
-				Symbol:      "AAPL",
-				Display:     "AAPL",
-				Name:        "Apple Inc",
-				Type:        model.AssetStock,
-				Price:       225.50,
-				Open24h:     223.10,
-				High24h:     226.20,
-				Low24h:      222.80,
-				Volume24h:   45000000.0,
-				MarketCap:   "$3.45T",
-				Change24h:   1.08,
-				Change7D:    3.50,
-				History:     generateMock7D(223.10, 225.50, 0.6),
-				History7D:   extractCloses(aaplCandles),
-				Candles:     aaplCandles,
-				LastUpdated: time.Now(),
-			},
-		},
-	}
+var mockBase = map[string]float64{
+	"BTC": 78402, "ETH": 2467.42, "SOL": 185.75, "DOGE": 0.1632, "SPY": 571.2,
+	"TSLA": 215.3, "GOOGL": 168.4, "AAPL": 225.5, "NVDA": 131.2, "MSFT": 420.1,
 }
 
-// FetchPair implements PriceFetcher.
-func (m *MockFetcher) FetchPair(ctx context.Context, rawInput string) (model.CryptoPair, error) {
-	symbol, display := NormalizeSymbol(rawInput)
-	if pair, exists := m.MockData[symbol]; exists {
-		pair.LastUpdated = time.Now()
-		return pair, nil
+// FetchPair returns a synthetic quote for symbol.
+func (m *MockFetcher) FetchPair(_ context.Context, raw string) (model.Asset, error) {
+	if err := ValidateInput(raw); err != nil {
+		return model.Asset{Err: err}, err
 	}
+	symbol, display := NormalizeSymbol(raw)
+	kind := DetectAssetType(raw)
+	if kind == "" {
+		kind = model.AssetCrypto
+	}
+	if kind == model.AssetStock {
+		symbol = extractBaseTicker(symbol)
+	}
+	base := extractBaseTicker(symbol)
 
-	assetType := DetectAssetType(symbol)
-	mockCandles := generateMockOHLC(96.6, 100.0, 0.2)
-	name := LookupAssetName(symbol)
-	return model.CryptoPair{
+	h := fnv.New32a()
+	_, _ = h.Write([]byte(base))
+	seed := float64(h.Sum32()%1000) / 1000
+
+	price, ok := mockBase[base]
+	if !ok {
+		price = 1 + seed*500
+	}
+	now := m.Now()
+	phase := seed * 2 * math.Pi
+	drift := 1 + 0.004*math.Sin(float64(now.Unix())/30+phase)
+	price *= drift
+
+	history := make([]float64, 24)
+	for i := range history {
+		t := float64(i) / 23
+		history[i] = price * (1 + 0.03*math.Sin(t*4+phase) - 0.02*(1-t)*(seed-0.5))
+	}
+	history[len(history)-1] = price
+
+	change := (price/history[0] - 1) * 100
+	return model.Asset{
 		Symbol:      symbol,
 		Display:     display,
-		Name:        name,
-		Type:        assetType,
-		Price:       100.00,
-		Open24h:     95.00,
-		High24h:     105.00,
-		Low24h:      90.00,
-		Volume24h:   10000.00,
-		MarketCap:   "$10.0B",
-		Change24h:   5.26,
-		Change7D:    3.50,
-		History:     generateMock7D(95.0, 100.0, 0.2),
-		History7D:   extractCloses(mockCandles),
-		Candles:     mockCandles,
-		LastUpdated: time.Now(),
+		Name:        LookupAssetName(symbol),
+		Type:        kind,
+		Source:      "mock",
+		Price:       price,
+		Open24h:     history[0],
+		High24h:     price * 1.02,
+		Low24h:      price * 0.98,
+		Volume24h:   1e6 * (1 + seed*50),
+		MarketCap:   price * (1e6 + seed*1e9),
+		Change24h:   change,
+		History:     history,
+		LastUpdated: now,
 	}, nil
 }
 
-// FetchPrices implements PriceFetcher.
-func (m *MockFetcher) FetchPrices(ctx context.Context, symbols []string) ([]model.CryptoPair, error) {
-	pairs := make([]model.CryptoPair, len(symbols))
+// FetchPrices returns synthetic quotes for symbols.
+func (m *MockFetcher) FetchPrices(ctx context.Context, symbols []string) ([]model.Asset, error) {
+	out := make([]model.Asset, len(symbols))
 	for i, s := range symbols {
-		p, _ := m.FetchPair(ctx, s)
-		pairs[i] = p
-	}
-	return pairs, nil
-}
-
-func generateMockOHLC(start, end float64, phase float64) []model.Candle {
-	candles := make([]model.Candle, 28)
-	now := time.Now()
-
-	for i := 0; i < 28; i++ {
-		t := float64(i) / 27.0
-		wave := math.Sin(t*3.14159*3.0+phase) * ((end - start) * 0.2)
-		cOpen := start + (end-start)*t + wave
-		cClose := cOpen * (1.0 + math.Cos(t*10.0)*0.015)
-		cHigh := math.Max(cOpen, cClose) * 1.01
-		cLow := math.Min(cOpen, cClose) * 0.99
-
-		candles[i] = model.Candle{
-			Timestamp: now.Add(time.Duration(i-28) * 6 * time.Hour),
-			Open:      cOpen,
-			High:      cHigh,
-			Low:       cLow,
-			Close:     cClose,
-			Volume:    5000.0 * (1.0 + t),
+		a, err := m.FetchPair(ctx, s)
+		if err != nil {
+			a.Err = err
 		}
+		out[i] = a
 	}
-	return candles
-}
-
-func generateMock7D(start, end float64, phase float64) []float64 {
-	pts := make([]float64, 28)
-	for i := 0; i < 28; i++ {
-		t := float64(i) / 27.0
-		wave := math.Sin(t*3.14159*3.0+phase) * ((end - start) * 0.2)
-		pts[i] = start + (end-start)*t + wave
-	}
-	return pts
-}
-
-func extractCloses(candles []model.Candle) []float64 {
-	closes := make([]float64, len(candles))
-	for i, c := range candles {
-		closes[i] = c.Close
-	}
-	return closes
+	return out, nil
 }

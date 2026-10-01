@@ -1,9 +1,12 @@
+// Package config loads and saves the persistent watchlist configuration.
 package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"cryptowatcher/internal/model"
 )
@@ -30,8 +33,12 @@ func GetConfigPath() (string, error) {
 	return filepath.Join(configDir, configDirName, configFileName), nil
 }
 
-// Load reads the configuration from disk. If the file does not exist,
-// it saves and returns DefaultConfig().
+// Load reads the configuration from disk.
+//
+// A missing file yields (and persists) the defaults. A file that cannot be
+// parsed is moved aside to config.json.bak so it is never silently overwritten;
+// defaults are returned together with a descriptive error. Load never returns a
+// nil config.
 func Load() (*model.Config, error) {
 	path, err := GetConfigPath()
 	if err != nil {
@@ -45,34 +52,43 @@ func Load() (*model.Config, error) {
 			_ = Save(cfg)
 			return cfg, nil
 		}
-		return model.DefaultConfig(), err
+		return model.DefaultConfig(), fmt.Errorf("reading %s: %w", path, err)
 	}
 
 	var cfg model.Config
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return model.DefaultConfig(), nil
+		backup := path + ".bak"
+		if renameErr := os.Rename(path, backup); renameErr != nil {
+			return model.DefaultConfig(), fmt.Errorf("%s is invalid (%v) and could not be backed up: %w", path, err, renameErr)
+		}
+		return model.DefaultConfig(), fmt.Errorf("%s is invalid (%v); saved a copy to %s and using defaults", path, err, backup)
 	}
 
-	// Handle legacy config migration
-	if len(cfg.CryptoPairs) == 0 {
+	// Legacy migration: a single "pairs" list. Only applies when the new keys
+	// are absent, so a deliberately emptied list stays empty.
+	if cfg.CryptoPairs == nil && cfg.StockPairs == nil {
 		if len(cfg.Pairs) > 0 {
 			cfg.CryptoPairs = cfg.Pairs
 		} else {
-			cfg.CryptoPairs = model.DefaultConfig().CryptoPairs
+			def := model.DefaultConfig()
+			cfg.CryptoPairs, cfg.StockPairs = def.CryptoPairs, def.StockPairs
 		}
 	}
-	if len(cfg.StockPairs) == 0 {
-		cfg.StockPairs = model.DefaultConfig().StockPairs
-	}
+	cfg.Pairs = nil
+	cfg.CryptoPairs = dedupe(cfg.CryptoPairs)
+	cfg.StockPairs = dedupe(cfg.StockPairs)
 
-	if cfg.RefreshInterval <= 0 {
-		cfg.RefreshInterval = 5
+	switch {
+	case cfg.RefreshInterval <= 0:
+		cfg.RefreshInterval = model.DefaultRefreshInterval
+	case cfg.RefreshInterval < model.MinRefreshInterval:
+		cfg.RefreshInterval = model.MinRefreshInterval
 	}
 
 	return &cfg, nil
 }
 
-// Save writes the given configuration to disk.
+// Save atomically writes the configuration to disk.
 func Save(cfg *model.Config) error {
 	path, err := GetConfigPath()
 	if err != nil {
@@ -80,14 +96,62 @@ func Save(cfg *model.Config) error {
 	}
 
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 
-	data, err := json.MarshalIndent(cfg, "", "  ")
+	out := *cfg
+	out.Pairs = nil
+	if out.CryptoPairs == nil {
+		out.CryptoPairs = []string{}
+	}
+	if out.StockPairs == nil {
+		out.StockPairs = []string{}
+	}
+
+	data, err := json.MarshalIndent(&out, "", "  ")
 	if err != nil {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0644)
+	tmp, err := os.CreateTemp(dir, configFileName+".tmp-*")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	cleanup := func() { _ = os.Remove(tmpName) }
+
+	if _, err := tmp.Write(append(data, '\n')); err != nil {
+		_ = tmp.Close()
+		cleanup()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Chmod(tmpName, 0o644); err != nil {
+		cleanup()
+		return err
+	}
+	if err := os.Rename(tmpName, path); err != nil {
+		cleanup()
+		return err
+	}
+	return nil
+}
+
+func dedupe(in []string) []string {
+	seen := make(map[string]bool, len(in))
+	out := make([]string, 0, len(in))
+	for _, s := range in {
+		s = strings.TrimSpace(s)
+		key := strings.ToUpper(s)
+		if s == "" || seen[key] {
+			continue
+		}
+		seen[key] = true
+		out = append(out, s)
+	}
+	return out
 }

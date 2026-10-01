@@ -6,188 +6,179 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"cryptowatcher/internal/model"
 )
 
-// View renders the terminal user interface string for the macOS-style Widget Dashboard.
+const (
+	minTermWidth  = 40
+	minTermHeight = 14
+)
+
+// View renders the dashboard.
 func (m Model) View() string {
-	var b strings.Builder
-
-	// Header Banner
-	b.WriteString(titleStyle.Render(" WATCHER - STOCKS & CRYPTO DASHBOARD "))
-	b.WriteString("\n\n")
-
-	// Top Summary Cards Dashboard
-	b.WriteString(m.renderSummaryCards())
-	b.WriteString("\n")
-
-	cardWidth := 30
-
-	// 1. Cryptocurrency Section
-	b.WriteString(cryptoSectionHeaderStyle.Render("🪙  CRYPTOCURRENCY"))
-	b.WriteString("\n")
-	b.WriteString(m.renderWidgetGrid(m.cryptoPairs, m.sectionIndex == 0, m.cryptoCursor, cardWidth))
-	b.WriteString("\n")
-
-	// 2. Stocks & Equities Section
-	b.WriteString(stockSectionHeaderStyle.Render("📈  STOCKS & EQUITIES"))
-	b.WriteString("\n")
-	b.WriteString(m.renderWidgetGrid(m.stockPairs, m.sectionIndex == 1, m.stockCursor, cardWidth))
-	b.WriteString("\n")
-
-	// Modal Overlay for Adding Pairs
-	if m.mode == modeAdd {
-		b.WriteString("\n")
-		modalContent := fmt.Sprintf(
-			"Enter Ticker to Watch (e.g. BTC, ETH, SOL, SPY, TSLA, AAPL, NVDA):\n\n%s\n\n(Press Enter to submit, Esc to cancel)",
-			m.textInput.View(),
-		)
-		b.WriteString(modalStyle.Render(modalContent))
-		b.WriteString("\n")
+	if m.width > 0 && (m.width < minTermWidth || m.height < minTermHeight) {
+		return fmt.Sprintf("Terminal too small (%dx%d).\nNeed at least %dx%d.", m.width, m.height, minTermWidth, minTermHeight)
 	}
 
-	// Modal Overlay for Deleting Pairs Confirmation
-	if m.mode == modeDeleteConfirm {
-		b.WriteString("\n")
-		active := m.ActivePair()
-		targetName := "selected ticker"
-		if active != nil {
-			targetName = fmt.Sprintf("%s (%s)", active.Display, active.Name)
+	if m.mode == modeDetail {
+		if a := m.ActiveAsset(); a != nil {
+			return lipgloss.JoinVertical(lipgloss.Left, m.renderHeader(), "", renderDetail(*a, m.termWidth()))
 		}
-		modalContent := fmt.Sprintf(
-			"Remove Ticker Confirmation:\n\nAre you sure you want to remove %s?\n\n[y / Enter] Confirm Removal    [n / Esc] Cancel",
-			widgetSymbolStyle.Render(targetName),
-		)
-		b.WriteString(modalStyle.Render(modalContent))
-		b.WriteString("\n")
 	}
 
-	// Status Bar & Controls Footer
-	b.WriteString(m.renderFooter())
+	body, selTop, selBottom := m.renderBody()
+	footer := m.renderFooter()
 
-	return b.String()
+	// Scroll the body so the selected card stays visible on short terminals.
+	if m.height > 0 {
+		avail := m.height - lipgloss.Height(footer)
+		lines := strings.Split(body, "\n")
+		if avail > 0 && len(lines) > avail {
+			top := 0
+			if selBottom >= avail {
+				top = selBottom - avail + 1
+			}
+			if selTop < top {
+				top = selTop
+			}
+			end := min(top+avail, len(lines))
+			body = strings.Join(lines[top:end], "\n")
+		}
+	}
+	return body + "\n" + footer
 }
 
-func (m Model) renderWidgetGrid(items []model.CryptoPair, isSectionActive bool, selectedIdx int, cardWidth int) string {
-	if len(items) == 0 {
-		return rowStyle.Render("   No items in this section. Press 'a' to add a ticker.\n")
+func (m Model) termWidth() int {
+	if m.width > 0 {
+		return m.width
 	}
-
-	cardsPerRow := m.calculateCardsPerRow()
-	var sb strings.Builder
-	var currentRow []string
-
-	for i, item := range items {
-		isSelected := isSectionActive && (i == selectedIdx)
-		card := RenderWidgetCard(item, isSelected, cardWidth)
-		currentRow = append(currentRow, card)
-
-		if len(currentRow) == cardsPerRow || i == len(items)-1 {
-			sb.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, currentRow...))
-			sb.WriteString("\n")
-			currentRow = nil
-		}
-	}
-
-	return sb.String()
+	return defaultWidth
 }
 
-func (m Model) renderSummaryCards() string {
-	all := m.AllPairs()
-	if len(all) == 0 {
-		return ""
-	}
+// renderBody returns the header and all sections, plus the line range of the selected card row.
+func (m Model) renderBody() (body string, selTop, selBottom int) {
+	var lines []string
+	add := func(s string) { lines = append(lines, strings.Split(s, "\n")...) }
 
-	bestPair := all[0]
-	worstPair := all[0]
+	add(m.renderHeader())
+	add("")
 
-	for _, p := range all {
-		if p.Change24h > bestPair.Change24h {
-			bestPair = p
+	perRow, cardW := m.cardsPerRow(), m.cardWidth()
+	for i, s := range m.sections {
+		style := cryptoSectionHeaderStyle
+		if s.kind == model.AssetStock {
+			style = stockSectionHeaderStyle
 		}
-		if p.Change24h < worstPair.Change24h {
-			worstPair = p
+		add(style.Render("▍ "+s.title) + mutedStyle.Render(fmt.Sprintf("  %d", len(s.items))))
+
+		if len(s.items) == 0 {
+			add(mutedStyle.Render("  Nothing here yet — press 'a' to add a ticker."))
+			add("")
+			continue
+		}
+		for start := 0; start < len(s.items); start += perRow {
+			end := min(start+perRow, len(s.items))
+			cards := make([]string, 0, perRow)
+			for j := start; j < end; j++ {
+				cards = append(cards, RenderWidgetCard(s.items[j], i == m.active && j == s.cursor, cardW))
+			}
+			rowTop := len(lines)
+			add(lipgloss.JoinHorizontal(lipgloss.Top, cards...))
+			if i == m.active && s.cursor >= start && s.cursor < end {
+				selTop, selBottom = rowTop, len(lines)-1
+			}
 		}
 	}
-
-	c1 := summaryCardStyle.Render(fmt.Sprintf("ASSETS\n%s", summaryValueStyle.Render(fmt.Sprintf("%d Monitored (%d Crypto, %d Stocks)", len(all), len(m.cryptoPairs), len(m.stockPairs)))))
-
-	bestStr := fmt.Sprintf("%s (%s)", bestPair.Display, formatChange(bestPair.Change24h))
-	c2 := summaryCardStyle.Render(fmt.Sprintf("TOP GAINER\n%s", bestStr))
-
-	worstStr := fmt.Sprintf("%s (%s)", worstPair.Display, formatChange(worstPair.Change24h))
-	c3 := summaryCardStyle.Render(fmt.Sprintf("TOP LOSER\n%s", worstStr))
-
-	statusText := "🟢 LIVE (Coinbase, CoinGecko & Yahoo)"
-	if m.loading {
-		statusText = "🟡 UPDATING..."
-	} else if m.err != nil {
-		statusText = "🔴 ERROR"
-	}
-	c4 := summaryCardStyle.Render(fmt.Sprintf("STATUS\n%s", summaryValueStyle.Render(statusText)))
-
-	return lipgloss.JoinHorizontal(lipgloss.Top, c1, c2, c3, c4)
+	return strings.Join(lines, "\n"), selTop, selBottom
 }
 
+// renderHeader is the title bar plus a one-line market summary.
+func (m Model) renderHeader() string {
+	title := titleStyle.Render("CRYPTOWATCHER")
+	all := m.AllAssets()
+
+	var parts []string
+	parts = append(parts, m.statusIndicator(all))
+
+	var best, worst *model.Asset
+	for i := range all {
+		a := &all[i]
+		if !a.HasQuote() {
+			continue
+		}
+		if best == nil || a.Change24h > best.Change24h {
+			best = a
+		}
+		if worst == nil || a.Change24h < worst.Change24h {
+			worst = a
+		}
+	}
+	if best != nil && worst != nil && best != worst {
+		parts = append(parts,
+			"▲ "+best.Display+" "+formatChange(best.Change24h),
+			"▼ "+worst.Display+" "+formatChange(worst.Change24h))
+	}
+	parts = append(parts, mutedStyle.Render(fmt.Sprintf("%d assets", len(all))))
+
+	return ansi.Truncate(title+"  "+strings.Join(parts, mutedStyle.Render("  ·  ")), m.termWidth(), "…")
+}
+
+func (m Model) statusIndicator(all []model.Asset) string {
+	var failing int
+	for _, a := range all {
+		if a.Err != nil {
+			failing++
+		}
+	}
+	switch {
+	case m.lastRefresh.IsZero() && m.refreshing:
+		return warnStyle.Render("◌ LOADING")
+	case len(all) > 0 && failing == len(all):
+		return errorStyle.Render("● OFFLINE")
+	case failing > 0:
+		return warnStyle.Render(fmt.Sprintf("● PARTIAL %d/%d", len(all)-failing, len(all)))
+	case m.refreshing:
+		return warnStyle.Render("◌ UPDATING")
+	}
+	return positiveStyle.Render("● LIVE")
+}
+
+// renderFooter shows the active prompt (if any), the status line and key help.
 func (m Model) renderFooter() string {
-	var sb strings.Builder
+	var lines []string
 
-	if m.statusMsg != "" {
-		sb.WriteString(neutralStyle.Render(m.statusMsg))
-		sb.WriteString("\n")
+	switch m.mode {
+	case modeAdd:
+		lines = append(lines, modalStyle.Render(fmt.Sprintf(
+			"Add ticker — crypto (BTC, DOGE, HMM) or stock (SPY, NVDA)\n\n%s\n\nenter  look up    esc  cancel",
+			m.textInput.View())))
+	case modeDeleteConfirm:
+		name := "this ticker"
+		if a := m.ActiveAsset(); a != nil {
+			name = fmt.Sprintf("%s (%s)", a.Display, a.Name)
+		}
+		lines = append(lines, modalStyle.Render(fmt.Sprintf(
+			"Remove %s from your watchlist?\n\ny / enter  remove    n / esc  cancel",
+			widgetSymbolStyle.Render(name))))
 	}
 
-	lastUpdatedStr := "Never"
-	if !m.lastRefresh.IsZero() {
-		lastUpdatedStr = m.lastRefresh.Format("15:04:05")
+	if m.statusMsg != "" && time.Now().Before(m.statusUntil) {
+		style := neutralStyle
+		if m.statusErr {
+			style = errorStyle
+		}
+		lines = append(lines, style.Render(truncate(m.statusMsg, m.termWidth()-1)))
+	} else {
+		updated := "never"
+		if !m.lastRefresh.IsZero() {
+			updated = m.lastRefresh.Format("15:04:05")
+		}
+		lines = append(lines, mutedStyle.Render("updated "+updated))
 	}
 
-	controls := fmt.Sprintf(
-		"[a] Add Ticker | [d] Remove | [r] Refresh | [←/→/↑/↓] Navigate Grid | [q] Quit  (Last Updated: %s)",
-		lastUpdatedStr,
-	)
-	sb.WriteString(statusBarStyle.Render(controls))
-	sb.WriteString("\n")
-
-	return sb.String()
+	m.help.Width = m.termWidth()
+	lines = append(lines, ansi.Truncate(m.help.View(m.keys), m.termWidth(), "…"))
+	return strings.Join(lines, "\n")
 }
-
-func formatPrice(price float64) string {
-	if price == 0 {
-		return "$0.00"
-	}
-	if price < 0.01 {
-		return fmt.Sprintf("$%.6f", price)
-	}
-	if price < 1.0 {
-		return fmt.Sprintf("$%.4f", price)
-	}
-	return fmt.Sprintf("$%.2f", price)
-}
-
-func formatChange(change float64) string {
-	if change > 0 {
-		return positiveStyle.Render(fmt.Sprintf("+%.2f%%", change))
-	} else if change < 0 {
-		return negativeStyle.Render(fmt.Sprintf("%.2f%%", change))
-	}
-	return neutralStyle.Render("0.00%")
-}
-
-func formatVolume(vol float64) string {
-	if vol >= 1_000_000_000 {
-		return fmt.Sprintf("%.2fB", vol/1_000_000_000)
-	}
-	if vol >= 1_000_000 {
-		return fmt.Sprintf("%.2fM", vol/1_000_000)
-	}
-	if vol >= 1_000 {
-		return fmt.Sprintf("%.2fK", vol/1_000)
-	}
-	return fmt.Sprintf("%.2f", vol)
-}
-
-// Ensure time import is referenced properly
-var _ = time.Now
-var _ = model.CryptoPair{}
