@@ -1,8 +1,8 @@
 class Cryptowatcher < Formula
   desc "Real-time TUI cryptocurrency and stocks dashboard inspired by macOS Widgets"
   homepage "https://github.com/pawiromitchel/cryptowatcher"
-  url "https://github.com/pawiromitchel/cryptowatcher/archive/refs/tags/v1.1.0.tar.gz"
-  sha256 "1cea357562d23157f59804182e13b6a8024b195dfb5286184515dc68ed63d558"
+  url "https://github.com/pawiromitchel/cryptowatcher/archive/refs/tags/v1.2.0.tar.gz"
+  sha256 "eb3de94bab2ba944f6f816c0ec151fe1bfb19456e41176b34717c02473d75194"
   license "MIT"
 
   depends_on "go" => :build
