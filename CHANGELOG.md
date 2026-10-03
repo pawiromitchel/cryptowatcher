@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- Homebrew: the repo is now its own tap (`brew tap pawiromitchel/cryptowatcher <repo url>`). The formula installs the prebuilt release binaries (no Go toolchain needed) and is updated automatically by the release workflow after each tag. The separate `pawiromitchel/tap` is deprecated.
+- README now documents the real config location per OS.
+
 ## v1.2.0 - 2026-10-01
 
 ### Fixed

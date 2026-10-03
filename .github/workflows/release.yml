@@ -4,6 +4,12 @@ on:
   push:
     tags:
       - 'v*'
+  # Re-run only the Homebrew formula update for an existing release (e.g. after a failure).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag whose binaries the formula should point at (e.g. v1.2.0)
+        required: true
 
 permissions:
   contents: write
@@ -11,6 +17,7 @@ permissions:
 jobs:
   release:
     name: Build & Release Cross-Platform Binaries
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -72,10 +79,14 @@ jobs:
   formula:
     name: Update Homebrew formula
     needs: release
+    if: ${{ !cancelled() && (needs.release.result == 'success' || github.event_name == 'workflow_dispatch') }}
     runs-on: ubuntu-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
 
       - name: Compute checksums of the released binaries
@@ -84,7 +95,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           mkdir assets
-          gh release download "$GITHUB_REF_NAME" --dir assets --pattern '*.tar.gz'
+          gh release download "$TAG" --dir assets --pattern '*.tar.gz'
           for t in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
             f="assets/cryptowatcher-$t.tar.gz"
             test -s "$f" || { echo "missing $f" >&2; exit 1; }
@@ -92,11 +103,9 @@ jobs:
           done
 
       - name: Commit the formula to main
-        env:
-          VERSION: ${{ github.ref_name }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          ./scripts/update-formula.sh "${VERSION#v}" \
+          ./scripts/update-formula.sh "${TAG#v}" \
             "${{ steps.sums.outputs.darwin_arm64 }}" "${{ steps.sums.outputs.darwin_amd64 }}" \
             "${{ steps.sums.outputs.linux_arm64 }}" "${{ steps.sums.outputs.linux_amd64 }}"

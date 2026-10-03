@@ -30,18 +30,22 @@ A real-time Terminal User Interface (TUI) stocks and cryptocurrency dashboard in
 
 ### Via Homebrew (macOS & Linux)
 
-Install directly with one command:
+This repository is its own Homebrew tap, so there is no separate tap to maintain:
 
 ```bash
-brew install pawiromitchel/tap/cryptowatcher
-```
-
-Or tap first:
-
-```bash
-brew tap pawiromitchel/tap
+brew tap pawiromitchel/cryptowatcher https://github.com/pawiromitchel/cryptowatcher
 brew install cryptowatcher
 ```
+
+The formula installs the prebuilt binary from the latest GitHub release (macOS and Linux, arm64 and x86_64), so no Go toolchain is needed. To update later:
+
+```bash
+brew upgrade cryptowatcher
+```
+
+> Recent Homebrew versions refuse to load formulae from third-party taps until you trust them. If `brew install` tells you the tap is untrusted, run `brew trust pawiromitchel/cryptowatcher` and retry.
+
+Coming from the old `pawiromitchel/tap`? Run `brew uninstall cryptowatcher && brew untap pawiromitchel/tap`, then install from the new tap above.
 
 ---
 
@@ -97,7 +101,7 @@ make build
 
 ## Configuration
 
-Settings and watchlists are stored at `~/.config/cryptowatcher/config.json` (or `$XDG_CONFIG_HOME/cryptowatcher/config.json`; run `cryptowatcher -config-path` to print it):
+Settings and watchlists are stored in `config.json` inside a `cryptowatcher` folder in your user config directory (`~/Library/Application Support` on macOS, `~/.config` on Linux, or `$XDG_CONFIG_HOME` if set). Run `cryptowatcher -config-path` to print the exact path:
 
 ```json
 {
@@ -142,7 +146,12 @@ make test-e2e    # end-to-end only, verbose
 make cover       # unit-test coverage
 make run-mock    # run the UI with synthetic data
 make release     # cross-compile all targets into dist/
+./scripts/test-release.sh   # test the formula tooling
 ```
+
+### Releasing
+
+Push a tag: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`. The Release workflow tests, cross-compiles, publishes the GitHub release, then commits the updated Homebrew formula (new version and checksums) to `main`. If only the formula step fails, re-run it from the Actions tab with **Run workflow** and the tag.
 
 ### Test layers
 
@@ -161,6 +170,7 @@ internal/fakeapi/    in-process fake provider servers for tests
 internal/model/      shared types (Asset, Config)
 internal/ui/         Bubble Tea model, views, cards, charts, keymap
 e2e/                 end-to-end tests
+scripts/             Homebrew formula template and release tooling (run by the release workflow)
 ```
 
 ---
