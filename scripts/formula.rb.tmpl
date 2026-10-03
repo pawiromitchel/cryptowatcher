@@ -1,0 +1,42 @@
+class Cryptowatcher < Formula
+  desc "Real-time TUI cryptocurrency and stocks dashboard inspired by macOS Widgets"
+  homepage "https://github.com/pawiromitchel/cryptowatcher"
+  license "MIT"
+
+  livecheck do
+    url :stable
+    strategy :github_latest
+  end
+
+  on_macos do
+    on_arm do
+      url "https://github.com/pawiromitchel/cryptowatcher/releases/download/v__VERSION__/cryptowatcher-darwin-arm64.tar.gz"
+      sha256 "__SHA_DARWIN_ARM64__"
+    end
+    on_intel do
+      url "https://github.com/pawiromitchel/cryptowatcher/releases/download/v__VERSION__/cryptowatcher-darwin-amd64.tar.gz"
+      sha256 "__SHA_DARWIN_AMD64__"
+    end
+  end
+
+  on_linux do
+    on_arm do
+      url "https://github.com/pawiromitchel/cryptowatcher/releases/download/v__VERSION__/cryptowatcher-linux-arm64.tar.gz"
+      sha256 "__SHA_LINUX_ARM64__"
+    end
+    on_intel do
+      url "https://github.com/pawiromitchel/cryptowatcher/releases/download/v__VERSION__/cryptowatcher-linux-amd64.tar.gz"
+      sha256 "__SHA_LINUX_AMD64__"
+    end
+  end
+
+  def install
+    # The release tarball holds a single binary named cryptowatcher-<os>-<arch>.
+    bin.install Dir["cryptowatcher-*"].first => "cryptowatcher"
+  end
+
+  test do
+    assert_match "config.json", shell_output("#{bin}/cryptowatcher -config-path")
+    assert_match version.to_s, shell_output("#{bin}/cryptowatcher -version")
+  end
+end

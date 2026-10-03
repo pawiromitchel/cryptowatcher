@@ -25,6 +25,9 @@ jobs:
       - name: Check formatting
         if: matrix.os == 'ubuntu-latest'
         run: test -z "$(gofmt -l .)" || (gofmt -l . && exit 1)
+      - name: Release tooling (formula rendering and update)
+        if: matrix.os == 'ubuntu-latest'
+        run: ./scripts/test-release.sh
       - name: Vet
         run: go vet ./...
       - name: Unit and end-to-end tests

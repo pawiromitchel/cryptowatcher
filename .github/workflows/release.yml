@@ -68,3 +68,35 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
           generate_release_notes: true
+
+  formula:
+    name: Update Homebrew formula
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute checksums of the released binaries
+        id: sums
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir assets
+          gh release download "$GITHUB_REF_NAME" --dir assets --pattern '*.tar.gz'
+          for t in darwin-arm64 darwin-amd64 linux-arm64 linux-amd64; do
+            f="assets/cryptowatcher-$t.tar.gz"
+            test -s "$f" || { echo "missing $f" >&2; exit 1; }
+            echo "${t//-/_}=$(sha256sum "$f" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          done
+
+      - name: Commit the formula to main
+        env:
+          VERSION: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          ./scripts/update-formula.sh "${VERSION#v}" \
+            "${{ steps.sums.outputs.darwin_arm64 }}" "${{ steps.sums.outputs.darwin_amd64 }}" \
+            "${{ steps.sums.outputs.linux_arm64 }}" "${{ steps.sums.outputs.linux_amd64 }}"
